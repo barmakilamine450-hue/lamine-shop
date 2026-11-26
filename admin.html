@@ -402,7 +402,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.6";
+const APP_VERSION = "1.1.7";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -467,6 +467,8 @@ setTimeout(chk, 2500); setInterval(chk, 3 * 60 * 1000);
 window.addEventListener("focus", chk); document.addEventListener("visibilitychange", () => { if (!document.hidden) chk(); });
 
 // طباعة التيكي وحدو (Xprinter 80 مم): ننسخوه برّا النافذة باش يتطبع كامل
+// التيكي يكبر على قد عرض الورقة اللي تعطيها الطابعة (80 مم ولا أكبر)
+const PRINT_FIT = Array.from({length: 122}, (_, i) => 56 + i * 2).map(w => `@media print and (min-width:${w}mm){#printArea{zoom:${(w * 0.92 / 72).toFixed(3)}}}`).join("");
 // طباعة التيكي (Xprinter 80 مم) في إطار مخفي خاص بيه: ما يتمسحش قبل ما تكمل الطباعة
 function printBon(html) {
   const b = document.getElementById("bonPrint"); if (!html && !b) return;
@@ -485,7 +487,13 @@ function printBon(html) {
     #printArea{display:block!important;width:72mm;margin:0 auto;padding:2mm 0 6mm}
     #printArea .bon{width:72mm!important;max-width:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin:0!important}
     #printArea .band,#printArea th,#printArea .tot,#printArea .cli span:first-child{background:#fff!important;color:#000!important}
-    #printArea .band{border:2px solid #000}#printArea .tot{border-radius:0}#printArea .tot small{opacity:1}#printArea .logo{width:56px}
+    #printArea .band{border:2px solid #000}#printArea .tot{border-radius:0}#printArea .tot small{opacity:1}
+    /* كتابة كحلة وغليظة باش تبان مليح في الطابعة الحرارية */
+    #printArea,#printArea *{color:#000!important;opacity:1!important}
+    #printArea .sub,#printArea .kv,#printArea td,#printArea .merci{font-weight:700!important}
+    #printArea th,#printArea td{border-color:#000!important}
+    #printArea .logo{width:64px;filter:grayscale(1) contrast(1.8)}
+    ${PRINT_FIT}
   </style></head><body><div id="printArea">${body}</div></body></html>`);
   d.close();
   const go = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.error(e); toast("❌ ما قدرتش نطبع: " + e.message, 5000); } };
