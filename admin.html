@@ -243,12 +243,14 @@ select.in{appearance:none;-webkit-appearance:none;background-image:linear-gradie
 .bon .dash{border-top:1.5px dashed #555;margin:8px 0}
 .bon .merci{text-align:center;font-size:13px;line-height:1.6}
 .bonacts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+#printArea{display:none}
 @media print{
-  @page{size:80mm auto;margin:3mm}
-  body *{visibility:hidden!important}
-  #bonPrint,#bonPrint *{visibility:visible!important}
-  #bonPrint{position:absolute;left:0;top:0;width:74mm;border:0;box-shadow:none;padding:0}
-  .ov{background:none!important}
+  @page{margin:0}
+  html,body{background:#fff!important;margin:0!important;padding:0!important;height:auto!important;min-height:0!important;overflow:visible!important}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important;width:72mm;margin:0 auto;padding:2mm 0 6mm}
+  #printArea .bon{width:72mm!important;max-width:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin:0!important}
+  #printArea,#printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 }
 .demo{background:#FFE9A8;color:#6B4A00;text-align:center;font-size:13px;padding:6px 10px;font-weight:700}
 
@@ -384,7 +386,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.0.4";
+const APP_VERSION = "1.0.5";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -418,6 +420,24 @@ function toast(t, ms=2400) { const e = $("#toast"); e.textContent = t; e.classLi
 function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
 function modal(html, cls="") { closeModal(); const o = document.createElement("div"); o.className = "ov"; o.id = "ov"; o.innerHTML = `<div class="sheet ${cls}">${html}</div>`; o.addEventListener("click", e => { if (e.target === o) closeModal(); }); document.body.appendChild(o); return o; }
 function closeModal() { const o = $("#ov"); if (o) o.remove(); }
+// طباعة التيكي وحدو (Xprinter 80 مم): ننسخوه برّا النافذة باش يتطبع كامل
+function printBon() {
+  const b = document.getElementById("bonPrint"); if (!b) return;
+  let pa = document.getElementById("printArea"); if (pa) pa.remove();
+  pa = document.createElement("div"); pa.id = "printArea"; pa.innerHTML = b.outerHTML.replace('id="bonPrint"', "");
+  document.body.appendChild(pa);
+  // طول الورقة = طول التيكي برك (الطابعة ما تخرجش ورق فارغ)
+  const fit = () => {
+    pa.style.cssText = "display:block;position:absolute;left:-9999px;top:0;width:72mm;padding:2mm 0 6mm";
+    const mm = Math.ceil(pa.offsetHeight * 25.4 / 96) + 4; pa.style.cssText = "";
+    let st = document.getElementById("printPage"); if (!st) { st = document.createElement("style"); st.id = "printPage"; document.head.appendChild(st); }
+    st.textContent = `@page{size:80mm ${Math.max(mm, 60)}mm;margin:0}`;
+  };
+  const done = () => { window.removeEventListener("afterprint", done); setTimeout(() => pa.remove(), 300); };
+  window.addEventListener("afterprint", done);
+  const imgs = [...pa.querySelectorAll("img")];
+  Promise.all(imgs.map(i => i.complete ? 1 : new Promise(r => { i.onload = i.onerror = r; }))).then(() => { fit(); setTimeout(() => window.print(), 60); });
+}
 let YES = null;
 function ask(q, fn, yes="نعم", danger=true) { YES = fn; modal(`<h2>${q}</h2><div class="bonacts"><button class="btn ${danger?"red":""}" onclick="const f=YES;YES=null;closeModal();f&&f()">${yes}</button><button class="btn ghost" onclick="closeModal()">لا</button></div>`); }
 function dl(name, text, type="application/json") { const b = new Blob([text], {type}); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
@@ -1165,10 +1185,10 @@ function ticketText(s) {
 function showTicket(s, fresh=false, autoPrint=false) {
   const c = s.cid && S.customers.find(x => x.id === s.cid);
   modal(`${fresh ? `<div class="alert ok"><i>✅</i><div>تسجّلت البيعة #${esc(s.code)}</div></div>` : ""}<div class="bonwrap">${ticketHTML(s)}</div>
-    <div class="bonacts"><button class="btn dark" onclick="window.print()">🖨️ طباعة</button><a class="btn green" target="_blank" href="https://wa.me/${c && c.phone ? waNum(c.phone) : ""}?text=${encodeURIComponent(ticketText(s))}">💬 واتساب</a></div>
+    <div class="bonacts"><button class="btn dark" onclick="printBon()">🖨️ طباعة</button><a class="btn green" target="_blank" href="https://wa.me/${c && c.phone ? waNum(c.phone) : ""}?text=${encodeURIComponent(ticketText(s))}">💬 واتساب</a></div>
     <div style="height:8px"></div><button class="btn" id="tnew" onclick="closeModal();${S.tab === "pos" ? "posFocus()" : "go('pos')"}">🧾 بيعة جديدة <small style="opacity:.7">(Enter)</small></button>`);
   if (fresh) setTimeout(() => $("#tnew") && $("#tnew").focus(), 80);
-  if (autoPrint) setTimeout(() => window.print(), 450);
+  if (autoPrint) setTimeout(printBon, 450);
 }
 async function openSale(id) {
   const s = S.salesToday.find(x => x.id === id) || (S.ui.rsales || []).find(x => x.id === id) || await DB.get("sales", id);
@@ -1476,7 +1496,7 @@ function bonHTML(x) {
 }
 function openBon(id) {
   const x = S.orders.find(o => o.id === id); if (!x) return;
-  modal(`<div class="bonwrap">${bonHTML(x)}</div><div class="bonacts"><button class="btn dark" onclick="window.print()">🖨️ طباعة / PDF</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
+  modal(`<div class="bonwrap">${bonHTML(x)}</div><div class="bonacts"><button class="btn dark" onclick="printBon()">🖨️ طباعة / PDF</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
 
 /* ============================================================
