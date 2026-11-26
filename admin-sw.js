@@ -1,7 +1,13 @@
-// Lamine Pro — يخلّي البرنامج يتحل حتى بلا أنترنت
-const C = "lamine-pro-v2";
-self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["admin.html", "admin.webmanifest", "pro-192.png"])).catch(() => {})); });
-self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+// Lamine Pro — يتحدّث وحدو كي تكون الأنترنت، ويخدم من الذاكرة كي ما تكونش
+const C = "lamine-pro-v3";
+self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["admin.html", "admin.webmanifest", "pro-192.png"].map(u => new Request(u, {cache: "no-cache"})))).catch(() => {})); });
+self.addEventListener("activate", e => e.waitUntil((async () => {
+  const ks = await caches.keys(); await Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)));
+  await self.clients.claim();
+  // النسخة القديمة اللي راهي محلولة: نعاودو نحلّوها بالجديدة
+  const cs = await self.clients.matchAll({type: "window"});
+  cs.forEach(c => { try { c.navigate(c.url); } catch (err) {} });
+})()));
 self.addEventListener("fetch", e => {
   const r = e.request, u = new URL(r.url);
   if (r.method !== "GET") return;
@@ -10,7 +16,11 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (u.origin !== location.origin || u.search.includes("nocache")) return;
-  // يتحل من الذاكرة ديراكت (سريع وبلا أنترنت)، ويجيب النسخة الجديدة في الخلف للمرة الجاية (بلا كاش GitHub)
-  const net = fetch(r.url, {cache: "no-cache", credentials: "same-origin"}).then(res => { if (res.ok) { const cp = res.clone(); caches.open(C).then(c => c.put(r, cp)); } return res; });
-  e.respondWith(caches.match(r, {ignoreSearch: true}).then(m => { if (m) { e.waitUntil(net.catch(() => {})); return m; } return net; }).catch(() => net));
+  // الأنترنت أولا (آخر نسخة)، وإذا طوّلت ولا ما كانتش: من الذاكرة
+  e.respondWith((async () => {
+    const net = fetch(r.url, {cache: "no-cache", credentials: "same-origin"}).then(res => { if (res.ok) { const cp = res.clone(); caches.open(C).then(c => c.put(r.url.split("?")[0], cp)); } return res; });
+    const cached = await caches.match(r.url.split("?")[0]) || await caches.match(r, {ignoreSearch: true});
+    if (!cached) return net;
+    return Promise.race([net.catch(() => cached), new Promise(ok => setTimeout(() => ok(cached), 4000))]);
+  })());
 });
