@@ -436,7 +436,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5.0";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1450,6 +1450,9 @@ function editProduct(id, preset={}) {
       <div><label class="f">🔢 الباركود</label><div style="display:flex;gap:6px"><input class="in" id="e_bc" dir="ltr" value="${esc(inv.barcode || preset.barcode || "")}"><button class="mini" onclick="scanBarcode(c=>$('#e_bc').value=c)">📷</button></div></div></div>
     <div class="row2">${!id || inv.qty == null ? `<div><label class="f">الكمية اللي عندك دروك</label><input class="in" id="e_qty" inputmode="decimal" placeholder="اختياري"></div>` : `<div></div>`}
       <div><label class="f">⚠️ نعلمك كي تهبط لـ</label><input class="in" id="e_min" inputmode="decimal" value="${inv.min != null ? inv.min : ""}" placeholder="${+S.pro.defMin || 0}"></div></div>
+    <label class="f">📅 ${id ? "زيد تاريخ انتهاء (سلعة جديدة وصلت)" : "تاريخ الانتهاء"} <small class="muted">(اختياري · يروح لـ ⏳ الصلاحية وصلاحيتي)</small></label>
+    <div style="display:flex;gap:6px;align-items:center"><input class="in" type="date" id="e_exp" style="flex:1"><label class="btn ghost sm" style="width:auto;white-space:nowrap;cursor:pointer">📷 صوّر التاريخ<input type="file" accept="image/*" capture="environment" class="hidden" onchange="ocrExp(this)"></label></div>
+    <div id="e_expc" class="chips" style="margin-top:6px;flex-wrap:wrap"></div>
     <label class="f">وصف قصير (يبان للزبائن)</label><textarea class="in" id="e_desc" rows="2">${esc(EP.desc)}</textarea>
     <div class="seg" style="margin-top:12px"><button id="e_stock" class="${EP.stock !== false ? "on" : ""}" onclick="EP.stock=!(EP.stock!==false);EP.autoOut=false;this.classList.toggle('on');this.textContent=EP.stock!==false?'✅ متوفرة':'⛔ نفدت'">${EP.stock !== false ? "✅ متوفرة" : "⛔ نفدت"}</button>
       <button class="${EP.active !== false ? "on" : ""}" onclick="EP.active=!(EP.active!==false);this.classList.toggle('on');this.textContent=EP.active!==false?'👁️ ظاهرة للزبائن':'🙈 مخفية'">${EP.active !== false ? "👁️ ظاهرة للزبائن" : "🙈 مخفية"}</button></div>
@@ -1495,7 +1498,9 @@ async function saveProd(isEdit) {
   } else ops.push({t: "set", c: "inv", id, d: S.inv[id] ? invD : invD.barcode || invD.min != null ? {...invD} : invD, merge: true});
   // إذا ما كتبش الكمية وما كانش متبعة: ما نديروش inv بكمية (يبقى «ما هيش متبعة»)
   if (qS === "" && !S.inv[id] && !invD.barcode && invD.min == null) ops.splice(ops.findIndex(o => o.c === "inv"), 1);
-  try { await commitFast(ops, "product"); closeModal(); toast("✅ تحفظت السلعة"); }
+  const expEl = $("#e_exp"), exp = expEl ? expEl.value : "";
+  if (/^\d{4}-\d\d-\d\d$/.test(exp)) ops.push({t: "set", c: "batches", id: uid(), d: {pid: id, name: EP.name, barcode: bc, exp, qty: qS, alerts: [30, 7, 1], note: "", done: false, created: Date.now(), ts: Date.now(), by: S.me.name}});
+  try { await commitFast(ops, "product"); closeModal(); toast(exp ? "✅ تحفظت السلعة + تاريخ الانتهاء" : "✅ تحفظت السلعة"); }
   catch (e) { $("#e_err").textContent = "ما تحفظتش (الصلاحيات ولا حجم الصورة)"; $("#e_save").disabled = false; }
 }
 async function delProduct(id) {
@@ -2494,6 +2499,59 @@ ${k.counted != null ? `<div class="r big"><span>لقيت</span><b>${n(k.counted)
 ${own && k.diff != null ? `<div class="r big"><span>الفرق</span><b>${Math.abs(k.diff) < 1 ? "مضبوط" : (k.diff > 0 ? "زايد " : "ناقص ") + n(Math.abs(k.diff)) + " DA"}</b></div>` : ""}
 <div class="c" style="margin-top:.6rem">${esc(k.by || S.me.name)} · ${d.toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"})}</div>
 </body></html>`);
+}
+
+/* ============================================================
+   📅 قراءة تاريخ الانتهاء من الصورة (نفس محرّك صلاحيتي — الملفات من /salahiti/)
+   ============================================================ */
+function parseExpiry(text,today){today=today||new Date();const T0=Date.UTC(today.getFullYear(),today.getMonth(),today.getDate());let s=String(text||"").toUpperCase();s=s.replace(/[‐-―]/g,"-").replace(/[،,]/g," ");s=s.replace(/(?<=\d)[O](?=\d)|(?<=\d)[O](?=[\/.\-\s])|(?<=[\/.\-\s])[O](?=\d)/g,"0");s=s.replace(/(?<=\d)[IL|](?=\d)|(?<=[\/.\-])[IL|](?=\d)|(?<=\d)[IL|](?=[\/.\-])/g,"1");s=s.replace(/(?<=\d)S(?=\d)/g,"5").replace(/(?<=\d)B(?=\d)/g,"8");
+const MON={JAN:1,JANV:1,JANVIER:1,JANUARY:1,FEB:2,FEV:2,"FÉV":2,FEVR:2,FEVRIER:2,"FÉVRIER":2,FEBRUARY:2,MAR:3,MARS:3,MARCH:3,APR:4,AVR:4,AVRIL:4,APRIL:4,MAY:5,MAI:5,JUN:6,JUIN:6,JUNE:6,JUL:7,JUIL:7,JUILLET:7,JULY:7,AUG:8,AOU:8,AOUT:8,"AOÛT":8,AUGUST:8,SEP:9,SEPT:9,SEPTEMBRE:9,SEPTEMBER:9,OCT:10,OCTOBRE:10,OCTOBER:10,NOV:11,NOVEMBRE:11,NOVEMBER:11,DEC:12,"DÉC":12,DECEMBRE:12,"DÉCEMBRE":12,DECEMBER:12};
+const KEY=/(EXP|EXPIRY|EXPIRE|E\.X\.P|BB|BBE|BEST\s*BEFORE|USE\s*BY|DLC|DLUO|DDM|A\s*CONSOMMER|À\s*CONSOMMER|CONSOMMER|PER|VAL|صالح|ينتهي|الانتهاء|انتهاء)/g;const PROD=/(PROD|MFG|MFD|MAN|FAB|FABRICATION|P\.D|PD|LOT|انتاج|الإنتاج)/g;const keyPos=[],prodPos=[];let m;while((m=KEY.exec(s)))keyPos.push(m.index);while((m=PROD.exec(s)))prodPos.push(m.index);const out=[];const lastDay=(y,mo)=>new Date(Date.UTC(y,mo,0)).getUTCDate();
+function add(y,mo,d,idx,raw,monthOnly){if(y<100)y+=2000;if(mo<1||mo>12||y<2015||y>2045)return;if(monthOnly)d=lastDay(y,mo);if(d<1||d>lastDay(y,mo))return;const t=Date.UTC(y,mo-1,d);const days=(t-T0)/864e5;let score=0;if(days>=-400&&days<=3650)score+=3;else score-=4;if(days>=0)score+=1;const nearKey=keyPos.some(p=>idx-p>=0&&idx-p<22);const nearProd=prodPos.some(p=>idx-p>=0&&idx-p<18);if(nearKey)score+=4;if(nearProd)score-=3;if(!monthOnly)score+=.5;out.push({iso:new Date(t).toISOString().slice(0,10),score,raw,t})}
+const re=[[/(?<!\d)(20\d\d)\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{1,2})(?!\d)/g,x=>[+x[1],+x[2],+x[3],false]],[/(?<!\d)(\d{1,2})\s*[\/.\-\s]\s*(\d{1,2})\s*[\/.\-\s]\s*(\d{4}|\d{2})(?!\d)/g,x=>[+x[3],+x[2],+x[1],false]],[/(?<![\d\/.\-])(\d{1,2})\s*[\/.\-]\s*(20\d\d)(?!\d)/g,x=>[+x[2],+x[1],1,true]],[/(?<![\d\/.\-])(\d{1,2})\s*[\/.\-]\s*(\d{2})(?![\d\/.\-])/g,x=>[+x[2],+x[1],1,true]],[/(?<!\d)(\d{2})(\d{2})(20\d\d)(?!\d)/g,x=>[+x[3],+x[2],+x[1],false]],[/(?<!\d)(\d{2})(\d{2})(\d{2})(?!\d)/g,x=>[+x[3],+x[2],+x[1],false]]];
+for(const [r,f] of re){r.lastIndex=0;while((m=r.exec(s))){const [y,mo,d,mon]=f(m);add(y,mo,d,m.index,m[0].trim(),mon)}}
+const reM=/(?:(\d{1,2})\s*[\/.\-\s]?\s*)?([A-ZÉÛ]{3,9})\.?\s*[\/.\-\s]?\s*(20\d\d|\d{2})(?!\d)/g;while((m=reM.exec(s))){const mo=MON[m[2]];if(!mo){reM.lastIndex=m.index+1;continue}add(+m[3],mo,m[1]?+m[1]:1,m.index,m[0].trim(),!m[1])}
+const best={};for(const c of out)if(!best[c.iso]||best[c.iso].score<c.score)best[c.iso]=c;let list=Object.values(best);const plaus=list.filter(c=>c.score>0);if(plaus.length>1){const mx=Math.max(...plaus.map(c=>c.t));plaus.forEach(c=>{if(c.t===mx)c.score+=1.5})}list.sort((a,b)=>b.score-a.score||b.t-a.t);return list.map(({iso,score,raw})=>({iso,score,raw}))}
+
+let OCRW = null;
+function kv(op,key,val){return new Promise((ok,no)=>{const r=indexedDB.open("keyval-store");r.onupgradeneeded=()=>r.result.createObjectStore("keyval");r.onerror=()=>no(r.error);
+  r.onsuccess=()=>{const db=r.result;const t=db.transaction("keyval",op==="get"?"readonly":"readwrite");const st=t.objectStore("keyval");const q=op==="get"?st.get(key):st.put(val,key);t.oncomplete=()=>{db.close();ok(q.result)};t.onerror=()=>no(t.error)}})}
+async function ocrWorker() {
+  if (OCRW) return OCRW;
+  const U = p => new URL("/salahiti/" + p, location.origin).href;
+  try { if (!(await kv("get", "./eng.traineddata"))) { const b = new Uint8Array(await (await fetch(U("eng-traineddata.wasm"))).arrayBuffer()); await kv("put", "./eng.traineddata", b); } } catch (e) { console.warn("lang", e); }
+  await loadScript(U("tesseract.min.js"));
+  OCRW = await Tesseract.createWorker("eng", 1, {workerPath: U("worker.min.js"), corePath: U(""), langPath: U("")});
+  await OCRW.setParameters({tessedit_pageseg_mode: "6"});
+  return OCRW;
+}
+function prep(canvas,invert){
+  const k=Math.max(1,900/canvas.width);const c=document.createElement("canvas");c.width=Math.round(canvas.width*k);c.height=Math.round(canvas.height*k);
+  const g=c.getContext("2d");g.drawImage(canvas,0,0,c.width,c.height);const im=g.getImageData(0,0,c.width,c.height),d=im.data;
+  let mn=255,mx=0;for(let i=0;i<d.length;i+=4){const v=.3*d[i]+.59*d[i+1]+.11*d[i+2];d[i]=v;if(v<mn)mn=v;if(v>mx)mx=v}
+  const r=Math.max(1,mx-mn);for(let i=0;i<d.length;i+=4){let v=(d[i]-mn)*255/r;if(invert)v=255-v;d[i]=d[i+1]=d[i+2]=v}
+  g.putImageData(im,0,0);return c;
+}
+async function readDate(canvas) {
+  const w = await ocrWorker(); let best = [];
+  for (const inv of [false, true]) { const {data} = await w.recognize(prep(canvas, inv)); const c = parseExpiry(data.text); if (c.length && (!best.length || c[0].score > best[0].score)) best = c; if (best.length && best[0].score >= 7) break; }
+  return best.filter(c => c.score > 0).slice(0, 4);
+}
+// زر «📷 صوّر التاريخ»: يقرا التاريخ ويعمّر الخانة
+async function ocrExp(inp, target = "#e_exp", chips = "#e_expc") {
+  const f = inp.files[0]; inp.value = ""; if (!f) return;
+  const box = $(chips); if (box) box.innerHTML = `<span class="muted">⏳ راني نقرا التاريخ... (أول مرة تطوّل شوية)</span>`;
+  try {
+    const src = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); });
+    const im = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+    const M = 1600, s = Math.min(1, M / Math.max(im.width, im.height)), c = document.createElement("canvas");
+    c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+    const cands = await readDate(c);
+    if (!cands.length) { if (box) box.innerHTML = `<span style="color:var(--bad)">ما قدرتش نقرا التاريخ. قرّب الكاميرا للتاريخ برك، ولا اكتبو بيدك.</span>`; return; }
+    $(target).value = cands[0].iso;
+    const fmtD = iso => iso.split("-").reverse().join("/");
+    if (box) box.innerHTML = `<span class="muted">✅ لقيت:</span> ` + cands.map((x, k) => `<button class="chip ${k ? "" : "on"}" onclick="$('${target}').value='${x.iso}';[...this.parentElement.querySelectorAll('.chip')].forEach(b=>b.classList.remove('on'));this.classList.add('on')"><bdi>${fmtD(x.iso)}</bdi></button>`).join(" ");
+  } catch (e) { console.error(e); if (box) box.innerHTML = `<span style="color:var(--bad)">❌ ما خدمش (${esc(e.message || "")}). اكتب التاريخ بيدك.</span>`; }
 }
 
 </script>
