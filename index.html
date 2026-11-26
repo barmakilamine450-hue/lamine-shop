@@ -185,7 +185,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const ADMIN_EMAILS = ["nizarlamintopup@gmail.com"]; // الإيميلات اللي يقدروا يدخلو لوحة المدير
+const ADMIN_EMAILS = []; // لوحة المدير ولات في admin.html
 const SHOP = {
   name: "Lamine Emballage",
   tagline: "عالم متكامل لمواد الحلويات والتغليف",
@@ -637,7 +637,7 @@ async function saveProd(){
    6) التشغيل
    ============================================================ */
 function go(h){location.hash=h}
-function route(){closeModal(); if(location.hash==="#admin") renderAdmin(); else renderShop()}
+function route(){closeModal(); if(location.hash==="#admin"){location.replace("admin.html");return} renderShop()}
 window.addEventListener("hashchange",route);
 (async function start(){
   if(FIREBASE_CONFIG){
