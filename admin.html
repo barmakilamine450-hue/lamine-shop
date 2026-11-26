@@ -419,6 +419,13 @@ html[data-theme="dark"] .pa.x{background:#3B1F14!important}
 .cashrep>div:last-child{border-bottom:0}
 .cashrep .exp{font-weight:900;font-size:18px}.cashrep .pf b{color:var(--ok);font-size:20px}.cashrep .df{font-size:19px}
 
+/* ===== أزرار السلعة + سهم البونات ===== */
+.pacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:8px;margin:4px 0 14px}
+.pacts button{background:var(--card);border-radius:16px;padding:10px 4px;font-weight:900;font-size:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:4px}
+.pacts button i{font-style:normal;font-size:26px}.pacts button.del{color:var(--bad)}
+.pd-prev{position:absolute;top:8px;left:10px;background:var(--choc);color:#fff;border-radius:10px;padding:5px 10px;font-size:12.5px;font-weight:900}
+html[data-theme="dark"] .pacts button{background:var(--card)!important;color:var(--ink)}
+
 </style>
 </head>
 <body>
@@ -436,7 +443,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -868,7 +875,7 @@ async function backfillCosts() {
 const TABS = [
   {k: "home", i: "🏠", t: "الرئيسية"},
   {k: "pos", i: "🧾", t: "الكاسة"},
-  {k: "stock", i: "📦", t: "المخزون"},
+  {k: "stock", i: "📦", t: "المنتجات"},
   {k: "exp", i: "⏳", t: "الصلاحية"},
   {k: "orders", i: "🛒", t: "الطلبيات"},
   {k: "debts", i: "💳", t: "الديون", owner: true},
@@ -1083,7 +1090,7 @@ VIEWS.home = {
       <div class="card"><h3>⚡ الوصول السريع</h3><div class="qa">${[
         ["pos", "🧾", "الكاسة", "البيع بالباركود ولا بالاسم", "F1", "g"],
         ...(own ? [["buyn", "🚚", "شراء جديد", "السلعة تدخل للمخزون", "F2", "r"]] : []),
-        ["stock", "📦", "المخزون", "الكميات والسلع الناقصة", "F3", "p"],
+        ["stock", "📦", "المنتجات", "السعر، الكمية، الملصقات", "F3", "p"],
         ...(own ? [["reports", "📊", "التقارير", "المبيعات والأرباح", "F4", "b"], ["debts", "💳", "الزبائن والديون", "الكريدي والخلاص", "F5", "b"], ["sup", "🏭", "الموردين", "شحال عليك لكل مورّد", "F6", "r"]] : []),
         ["exp", "⏳", "الصلاحية", "السلع اللي قربت تفوت", "F8", "o"],
         ["orders", "🛒", "طلبيات الموقع", "طلبيات الزبائن من الأنترنت", "", "p"],
@@ -1331,10 +1338,15 @@ function ticketText(s) {
     + (s.disc ? `\nتخفيض: ${Math.round(s.disc)} دج` : "") + `\nالمجموع: ${fmtT(s.total)}` + (s.pay === "debt" ? `\nخلّصت: ${fmtT(s.paid || 0)}\nالباقي كريدي: ${fmtT(s.total - (s.paid || 0))}` : "") + `\nشكرا على ثقتكم 🤍`;
 }
 let CUR_T = null;
+const daySales = () => [...(S.salesToday || [])].sort((a, b) => b.ts - a.ts);
+function prevSale() { const l = daySales(); if (!l.length) return toast("ما كاين حتى بيعة اليوم"); showTicket(l[0]); }
+function navSale(d) { const l = daySales(), i = l.findIndex(x => x.id === (CUR_T || {}).id); const n = l[i + d]; if (n) showTicket(n); }
 function showTicket(s, fresh=false, autoPrint=false) {
   CUR_T = s;
   const c = s.cid && S.customers.find(x => x.id === s.cid);
-  modal(`${fresh ? `<div class="alert ok"><i>✅</i><div>تسجّلت البيعة #${esc(s.code)}</div></div>` : ""}<div class="bonwrap">${ticketHTML(s)}</div>
+  const L = isOwner() ? daySales() : [], ix = L.findIndex(x => x.id === s.id);
+  const nav = ix >= 0 ? `<div class="grid2" style="margin-bottom:10px"><button class="btn ghost sm" ${ix < L.length - 1 ? "" : "disabled style='opacity:.4'"} onclick="navSale(1)">▶ البون اللي قبلو</button><button class="btn ghost sm" ${ix > 0 ? "" : "disabled style='opacity:.4'"} onclick="navSale(-1)">البون اللي بعدو ◀</button></div><p class="muted" style="text-align:center;margin:-4px 0 8px;font-size:13px">بون <bdi>${L.length - ix}</bdi> من <bdi>${L.length}</bdi> اليوم</p>` : "";
+  modal(`${fresh ? `<div class="alert ok"><i>✅</i><div>تسجّلت البيعة #${esc(s.code)}</div></div>` : ""}${nav}<div class="bonwrap">${ticketHTML(s)}</div>
     <div class="bonacts"><button class="btn dark" onclick="printTicket(CUR_T)">🖨️ طباعة</button><a class="btn green" target="_blank" href="https://wa.me/${c && c.phone ? waNum(c.phone) : ""}?text=${encodeURIComponent(ticketText(s))}">💬 واتساب</a></div>
     <div style="height:8px"></div><button class="btn" id="tnew" onclick="closeModal();${S.tab === "pos" ? "posFocus()" : "go('pos')"}">🧾 بيعة جديدة <small style="opacity:.7">(Enter)</small></button>`);
   if (fresh) setTimeout(() => $("#tnew") && $("#tnew").focus(), 80);
@@ -1360,14 +1372,14 @@ async function cancelSale(id) {
 }
 
 /* ============================================================
-   📦 المخزون
+   📦 المنتجات
    ============================================================ */
 VIEWS.stock = {
   render() {
     const c = k => S.products.filter(p => k === "need" ? ["low", "out"].includes(stockState(p.id)) : stockState(p.id) === k).length;
     const F = [["all", "الكل", S.products.length], ["need", "⚠️ ناقصة", c("need")], ["out", "⛔ نفدت", c("out")], ["low", "قليلة", c("low")], ["ok", "✅ كاينة", c("ok")], ["na", "ما هيش متبعة", c("na")]];
     const val = isOwner() ? Object.entries(S.inv).reduce((a, [pid, i]) => a + Math.max(0, +i.qty || 0) * costOf(pid), 0) : 0;
-    return `<div class="ptitle"><h1>📦 المخزون</h1>${isOwner() ? `<button class="btn sm" onclick="editProduct()">➕ سلعة جديدة</button>` : ""}</div>
+    return `<div class="ptitle"><h1>📦 المنتجات</h1>${isOwner() ? `<button class="btn sm" onclick="editProduct()">➕ سلعة جديدة</button>` : ""}</div>
       ${isOwner() ? `<div class="kpis"><div class="kpi dark"><small>عدد السلع</small><b><bdi>${S.products.length}</bdi></b></div><div class="kpi"><small>قيمة المخزون (شراء)</small><b>${fmt(val)}</b></div></div>` : ""}
       <div class="search"><span>🔍</span><input id="sq" placeholder="ابحث بالاسم ولا الباركود..." value="${esc(S.ui.sq || "")}" oninput="S.ui.sq=this.value;VIEWS.stock.draw()"><button onclick="scanBarcode(c=>{const id=Object.keys(S.inv).find(k=>S.inv[k].barcode===c);if(id)openStock(id);else toast('ما لقيتش: '+c)})">📷</button></div>
       <div class="chips">${F.map(([k, l, n]) => `<button class="chip ${S.ui.sf === k ? "on" : ""}" onclick="S.ui.sf='${k}';renderPage()">${l}<span class="n">${n}</span></button>`).join("")}</div>
@@ -1391,6 +1403,7 @@ async function openStock(pid) {
   const inv = S.inv[pid] || null, q = qtyOf(pid), own = isOwner();
   S.ui.adj = "in";
   modal(`<h2><span style="display:flex;gap:10px;align-items:center">${thumb(p)}<span>${esc(p.name)}<br><small class="muted">${fmt(p.price)} / ${esc(isKg(p) ? "كغ" : unitN(p))}</small></span></span><button class="x" onclick="closeModal()">×</button></h2>
+    <div class="pacts">${own ? `<button onclick="quickPrice('${pid}')"><i>💲</i>السعر</button>` : ""}<button onclick="document.getElementById('aq').focus()"><i>🔢</i>الكمية</button><button onclick="openLabel('${pid}')"><i>🏷️</i>ملصق السعر</button>${own ? `<button onclick="editProduct('${pid}')"><i>✏️</i>تعديل</button><button class="del" onclick="ask('تحذف «${esc(p.name).replace(/'/g, "")}» نهائياً؟',()=>delProduct('${p.id}'))"><i>🗑️</i>حذف</button>` : ""}</div>
     <div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi ${q == null ? "" : stockState(pid) === "out" ? "" : "dark"}"><small>الكمية في المحل</small><b>${q == null ? "ما هيش متبعة" : fmtQ(p, q)}</b></div>
       <div class="kpi"><small>نعلمك كي تهبط لـ</small><b>${fmtQ(p, minOf(pid))}</b></div></div>
     ${q == null ? `<div class="note info">هاد السلعة مازال ما هيش متبعة في المخزون. اكتب شحال عندك منها دروك (جرد) باش نبداو نحسبو.</div>` : ""}
@@ -1652,6 +1665,23 @@ function bonHTML(x) {
 function openBon(id) {
   const x = S.orders.find(o => o.id === id); if (!x) return;
   modal(`<div class="bonwrap">${bonHTML(x)}</div><div class="bonacts"><button class="btn dark" onclick="printBon()">🖨️ طباعة / PDF</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
+}
+
+// تبديل السعر بالخف
+function quickPrice(pid) {
+  const p = prod(pid); if (!p) return;
+  modal(`<h2>💲 ${esc(p.name)}<button class="x" onclick="openStock('${pid}')">×</button></h2>
+    <div class="row2"><div><label class="f">سعر البيع ${isKg(p) ? "(الكيلو)" : ""}</label><input class="in cash-in" id="qp" inputmode="decimal" value="${p.price || ""}" onkeydown="if(event.key==='Enter')saveQuickPrice('${pid}')"></div>
+      <div><label class="f">سعر الشراء</label><input class="in cash-in" id="qc" inputmode="decimal" value="${costOf(pid) || ""}" placeholder="—"></div></div>
+    <div style="height:12px"></div><button class="btn" onclick="saveQuickPrice('${pid}')">💾 حفظ</button>
+    <div style="height:8px"></div><button class="btn ghost" onclick="saveQuickPrice('${pid}',true)">💾 حفظ + 🏷️ اطبع الملصق الجديد</button>`);
+  setTimeout(() => { const e = $("#qp"); if (e) { e.focus(); e.select(); } }, 80);
+}
+async function saveQuickPrice(pid, lbl) {
+  const pr = num($("#qp").value), cs = $("#qc").value.trim(); if (!(pr > 0)) return toast("اكتب السعر");
+  const ops = [{t: "update", c: "products", id: pid, d: {price: pr}}]; if (cs !== "") ops.push({t: "set", c: "costs", id: pid, d: {cost: num(cs), ts: Date.now()}, merge: true});
+  try { await commitFast(ops, "price"); } catch (e) { return toast("❌ " + (e.code || e.message)); }
+  const p = prod(pid); if (p) p.price = pr; toast("✅ السعر تبدّل: " + fmtT(pr)); if (lbl) openLabel(pid); else openStock(pid);
 }
 
 /* ============================================================
@@ -2087,7 +2117,7 @@ function renderPD() {
       <div class="pd-top">
         <div class="pd-total"><small>المجموع</small><b id="pdtot">0 دج</b><button class="pd-disc" onclick="pdDisc()" id="pddisc">تخفيض</button></div>
         <div class="pd-card"><small>السلع</small><b id="pdcount">0 سطر · 0 قطعة</b><span class="muted" id="pdhint">سكانّي سلعة باش تبدا</span></div>
-        <div class="pd-card"><small>البون</small><b id="pdno">—</b><span class="muted">👤 ${esc(S.me.name)} · <bdi id="pdclock">${new Date().toLocaleTimeString("fr-FR")}</bdi></span></div>
+        <div class="pd-card" style="position:relative"><small>البون</small><b id="pdno">—</b>${own ? `<button class="pd-prev" title="البونات اللي فاتو" onclick="prevSale()">◀ البونات اللي فاتو</button>` : ""}<span class="muted">👤 ${esc(S.me.name)} · <bdi id="pdclock">${new Date().toLocaleTimeString("fr-FR")}</bdi></span></div>
       </div>
       <div class="pd-scan"><span>🔍</span><input id="pq" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="سكانّي الباركود ولا اكتب اسم السلعة هنا..." oninput="S.ui.pq=this.value;S.ui.si=0;posSuggest()" onkeydown="posKey(event)" onfocus="posSuggest()"><button onclick="scanBarcode(posCode)" title="الكاميرا">📷</button><div id="psug" class="sug"></div></div>
       <div class="pd-mid">
@@ -2552,6 +2582,80 @@ async function ocrExp(inp, target = "#e_exp", chips = "#e_expc") {
     const fmtD = iso => iso.split("-").reverse().join("/");
     if (box) box.innerHTML = `<span class="muted">✅ لقيت:</span> ` + cands.map((x, k) => `<button class="chip ${k ? "" : "on"}" onclick="$('${target}').value='${x.iso}';[...this.parentElement.querySelectorAll('.chip')].forEach(b=>b.classList.remove('on'));this.classList.add('on')"><bdi>${fmtD(x.iso)}</bdi></button>`).join(" ");
   } catch (e) { console.error(e); if (box) box.innerHTML = `<span style="color:var(--bad)">❌ ما خدمش (${esc(e.message || "")}). اكتب التاريخ بيدك.</span>`; }
+}
+
+/* ============================================================
+   🏷️ ملصقات السعر (Xprinter XP-410B) + الباركود Code128
+   الطباعة تتحل في Microsoft Edge (باش تختار طابعة الملصقات، والتيكيات تبقى في XP-80)
+   ============================================================ */
+const C128 = "212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232".split(" ");
+function c128codes(t) {
+  t = String(t || ""); const v = [];
+  if (/^\d+$/.test(t) && t.length >= 2) {
+    let s = t;
+    if (s.length % 2) { v.push(104, s.charCodeAt(0) - 32, 99); s = s.slice(1); } else v.push(105);
+    for (let i = 0; i < s.length; i += 2) v.push(+s.slice(i, i + 2));
+  } else { v.push(104); for (const ch of t) { const c = ch.charCodeAt(0); v.push(c >= 32 && c < 128 ? c - 32 : 0); } }
+  let sum = v[0]; for (let i = 1; i < v.length; i++) sum += v[i] * i;
+  v.push(sum % 103); return v;
+}
+// باركود SVG (يعمّر العرض والطول تاع الخانة اللي فيها)
+function c128svg(t) {
+  const pats = c128codes(t).map(c => C128[c]).concat("2331112"); let x = 10, r = "";
+  for (const p of pats) for (let i = 0; i < p.length; i++) { const w = +p[i]; if (i % 2 === 0) r += `<rect x="${x}" y="0" width="${w}" height="100"/>`; x += w; }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x + 10} 100" preserveAspectRatio="none" width="100%" height="100%" shape-rendering="crispEdges">${r}</svg>`;
+}
+// باركود داخلي للمحل (EAN-13 يبدا بـ 200)
+function newShopBarcode() {
+  let d = "200" + String(Date.now()).slice(-7) + String(Math.floor(Math.random() * 100)).padStart(2, "0");
+  d = d.slice(0, 12); let s = 0; for (let i = 0; i < 12; i++) s += +d[i] * (i % 2 ? 3 : 1);
+  return d + ((10 - s % 10) % 10);
+}
+const LBL_SIZES = [["auto", "حسب الطابعة"], ["40x20", "40×20"], ["40x30", "40×30"], ["50x25", "50×25"], ["50x30", "50×30"], ["60x40", "60×40"]];
+const lblCfg = () => Object.assign({size: "auto", mode: "full"}, ls("lp_lbl") || {});
+function labelItem(pid) {
+  const p = prod(pid), inv = S.inv[pid] || {};
+  return {name: p.name, bc: inv.barcode || "", price: +p.price || 0, unit: isKg(p) ? "/kg" : ""};
+}
+// نفس الشكل في المعاينة والطباعة: القياسات بـ cqh/cqw (نسبة للملصق)
+const LBL_CSS = `.lb{container-type:size;box-sizing:border-box;padding:3cqh 3cqw 2.5cqh;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:1cqh;overflow:hidden;font-family:Tahoma,Arial,sans-serif;color:#000;background:#fff;text-align:center}
+.lb .s{font-size:8.5cqh;line-height:1;flex:none}.lb .n{font-size:15cqh;font-weight:900;line-height:1.05;direction:rtl;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex:none}
+.lb .b{width:86cqw;flex:1 1 0;min-height:16cqh}.lb .d{font-size:8cqh;letter-spacing:.5cqw;line-height:1;direction:ltr;flex:none}.lb .p{font-size:24cqh;font-weight:900;line-height:1;white-space:nowrap;direction:ltr;unicode-bidi:isolate;flex:none}
+.lb.po{justify-content:center;gap:4cqh}.lb.po .n{font-size:18cqh}.lb.po .p{font-size:38cqh}`;
+function labelHTML(it, mode, shop) {
+  const price = Number(it.price || 0).toLocaleString("fr-FR", {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ | /g, " ");
+  const po = mode === "price" || !it.bc;
+  return `<div class="lb ${po ? "po" : ""}"><div class="s">${esc(shop || "")}</div><div class="n">${esc(it.name)}</div>${po ? "" : `<div class="b">${c128svg(it.bc)}</div><div class="d">${esc(it.bc)}</div>`}<div class="p">${price} DA${it.unit ? `<small style="font-size:.5em"> ${it.unit}</small>` : ""}</div></div>`;
+}
+function openLabel(pid) {
+  const p = prod(pid); if (!p) return; const c = lblCfg(), it = labelItem(pid), q = qtyOf(pid);
+  S.ui.lblPid = pid; S.ui.lblN = S.ui.lblN || 1;
+  const [w, h] = (c.size === "auto" ? "50x25" : c.size).split("x").map(Number);
+  modal(`<h2>🏷️ ملصق السعر<button class="x" onclick="closeModal()">×</button></h2>
+    <style>${LBL_CSS}.lbprev{display:flex;justify-content:center;padding:14px;background:var(--soft);border-radius:16px}.lbprev .lb{width:${w * 5.6}px;height:${h * 5.6}px;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.15)}</style>
+    <div class="lbprev">${labelHTML(it, c.mode, SHOP.name)}</div>
+    ${it.bc ? "" : `<div class="note warn" style="margin-top:10px">هاد السلعة ما عندهاش باركود. <button class="mini" onclick="genBarcode('${pid}')">🔢 دير باركود جديد</button></div>`}
+    <label class="f">واش تطبع؟</label>
+    <div class="seg"><button class="${c.mode !== "price" ? "on" : ""}" onclick="setLbl({mode:'full'})">🔢 الباركود + السعر</button><button class="${c.mode === "price" ? "on" : ""}" onclick="setLbl({mode:'price'})">💲 السعر برك</button></div>
+    <label class="f">شحال من ملصق؟</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input class="in" id="lb_n" inputmode="numeric" value="${S.ui.lblN}" style="width:110px;text-align:center;font-size:22px;font-weight:900">
+      ${[1, 5, 10].map(n => `<button class="chip" onclick="$('#lb_n').value=${n}">${n}</button>`).join("")}${q > 0 && !isKg(p) ? `<button class="chip" onclick="$('#lb_n').value=${Math.min(200, Math.round(q))}">كيما المخزون (${Math.round(q)})</button>` : ""}</div>
+    <label class="f">قياس الملصق (مم)</label>
+    <div class="chips" style="flex-wrap:wrap">${LBL_SIZES.map(([k, l]) => `<button class="chip ${c.size === k ? "on" : ""}" onclick="setLbl({size:'${k}'})">${l}</button>`).join("")}</div>
+    <div style="height:14px"></div><button class="btn dark" onclick="printLabels([{...labelItem('${pid}'),n:num($('#lb_n').value)||1}])">🖨️ اطبع في طابعة الملصقات</button>
+    <p class="muted" style="font-size:13px;margin:10px 2px 0">يتحل <b>Microsoft Edge</b> بالملصقات. أول مرة: اختار <b>Xprinter XP-410B</b> في «الطابعة»، و Edge يتفكّرها.</p>`);
+}
+function setLbl(o) { S.ui.lblN = num(($("#lb_n") || {}).value) || S.ui.lblN; ls("lp_lbl", Object.assign(lblCfg(), o)); openLabel(S.ui.lblPid); }
+async function genBarcode(pid) {
+  const bc = newShopBarcode();
+  try { await commitFast([{t: "set", c: "inv", id: pid, d: {barcode: bc, updatedAt: Date.now()}, merge: true}], "barcode"); } catch (e) { return toast("❌ " + (e.code || e.message)); }
+  S.inv[pid] = Object.assign(S.inv[pid] || {}, {barcode: bc}); toast("🔢 تزاد الباركود: " + bc); openLabel(pid);
+}
+function printLabels(items) {
+  const c = lblCfg(), data = {shop: SHOP.name || "", mode: c.mode, size: c.size, items: items.map(x => ({name: x.name, bc: x.bc, price: x.price, unit: x.unit, n: Math.max(1, Math.min(500, Math.round(x.n || 1)))}))};
+  const url = new URL("labels.html", location.href).href + "#" + encodeURIComponent(JSON.stringify(data));
+  if (/Windows/i.test(navigator.userAgent)) { location.href = "microsoft-edge:" + url; toast("🏷️ راهي تتحل في Edge...", 3000); }
+  else window.open(url, "_blank");
 }
 
 </script>
