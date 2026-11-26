@@ -402,7 +402,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.5";
+const APP_VERSION = "1.1.6";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -442,7 +442,12 @@ async function checkUpdate() {
   try {
     const t = await (await fetch("admin.html?nocache=" + Date.now(), {cache: "no-store"})).text();
     const m = t.match(/APP_VERSION = "([^"]+)"/);
-    if (m && m[1] !== APP_VERSION) showUpdateBar(m[1]);
+    if (m && m[1] !== APP_VERSION) {
+      // في شاشة الكود ولا الكاسة فارغة: يتحدّث وحدو بلا ما يسقسي
+      const idle = document.getElementById("pdots") || ((typeof S !== "undefined") && (!S.cart || !S.cart.length) && !document.getElementById("ov"));
+      if (idle) return doUpdate();
+      showUpdateBar(m[1]);
+    }
   } catch (e) {}
 }
 function showUpdateBar(v) {
@@ -456,7 +461,10 @@ async function doUpdate() {
   try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); const r = await navigator.serviceWorker.getRegistration("./admin"); if (r) await r.update(); } catch (e) {}
   location.reload();
 }
-setTimeout(checkUpdate, 8000); setInterval(checkUpdate, 30 * 60 * 1000);
+let LAST_CHK = 0;
+const chk = () => { if (Date.now() - LAST_CHK < 45000) return; LAST_CHK = Date.now(); checkUpdate(); };
+setTimeout(chk, 2500); setInterval(chk, 3 * 60 * 1000);
+window.addEventListener("focus", chk); document.addEventListener("visibilitychange", () => { if (!document.hidden) chk(); });
 
 // طباعة التيكي وحدو (Xprinter 80 مم): ننسخوه برّا النافذة باش يتطبع كامل
 // طباعة التيكي (Xprinter 80 مم) في إطار مخفي خاص بيه: ما يتمسحش قبل ما تكمل الطباعة
