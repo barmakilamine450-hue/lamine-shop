@@ -423,7 +423,7 @@ html[data-theme="dark"] .pa.x{background:#3B1F14!important}
 .pacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:8px;margin:4px 0 14px}
 .pacts button{background:var(--card);border-radius:16px;padding:10px 4px;font-weight:900;font-size:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:4px}
 .pacts button i{font-style:normal;font-size:26px}.pacts button.del{color:var(--bad)}
-.pd-prev{position:absolute;top:8px;left:10px;background:var(--choc);color:#fff;border-radius:10px;padding:5px 10px;font-size:12.5px;font-weight:900}
+.pd-prev{position:absolute;top:50%;transform:translateY(-50%);left:10px;background:#E8721C!important;color:#fff!important;border-radius:14px;padding:12px 16px;font-size:17px;font-weight:900;box-shadow:0 4px 12px rgba(232,114,28,.35);line-height:1.1}
 html[data-theme="dark"] .pacts button{background:var(--card)!important;color:var(--ink)}
 
 </style>
@@ -443,7 +443,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.6.1";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -2117,7 +2117,7 @@ function renderPD() {
       <div class="pd-top">
         <div class="pd-total"><small>المجموع</small><b id="pdtot">0 دج</b><button class="pd-disc" onclick="pdDisc()" id="pddisc">تخفيض</button></div>
         <div class="pd-card"><small>السلع</small><b id="pdcount">0 سطر · 0 قطعة</b><span class="muted" id="pdhint">سكانّي سلعة باش تبدا</span></div>
-        <div class="pd-card" style="position:relative"><small>البون</small><b id="pdno">—</b>${own ? `<button class="pd-prev" title="البونات اللي فاتو" onclick="prevSale()">◀ البونات اللي فاتو</button>` : ""}<span class="muted">👤 ${esc(S.me.name)} · <bdi id="pdclock">${new Date().toLocaleTimeString("fr-FR")}</bdi></span></div>
+        <div class="pd-card" style="position:relative"><small>البون</small><b id="pdno">—</b>${own ? `<button class="pd-prev" title="البونات اللي فاتو" onclick="prevSale()">◀ البونات<br>اللي فاتو</button>` : ""}<span class="muted">👤 ${esc(S.me.name)} · <bdi id="pdclock">${new Date().toLocaleTimeString("fr-FR")}</bdi></span></div>
       </div>
       <div class="pd-scan"><span>🔍</span><input id="pq" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="سكانّي الباركود ولا اكتب اسم السلعة هنا..." oninput="S.ui.pq=this.value;S.ui.si=0;posSuggest()" onkeydown="posKey(event)" onfocus="posSuggest()"><button onclick="scanBarcode(posCode)" title="الكاميرا">📷</button><div id="psug" class="sug"></div></div>
       <div class="pd-mid">
