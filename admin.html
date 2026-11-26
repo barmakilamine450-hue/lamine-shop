@@ -384,7 +384,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.0.2";
+const APP_VERSION = "1.0.3";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -849,7 +849,20 @@ window.addEventListener("hashchange", () => { const k = location.hash.slice(1); 
   DB.watchDoc("settings", "shop", d => { if (!S.role) { applyShop(d || {}); } });
   DB.onUser(async u => {
     S.user = u;
-    if (!u) { S.role = null; loginScreen(); return; }
+    if (!u) { S.role = null; ls("lp_role", null); loginScreen(); return; }
+    // يتحل ديراكت بالصلاحية المحفوظة (حتى بلا أنترنت)، ويتأكد في الخلف
+    const cached = ls("lp_role");
+    if (cached && cached.uid === u.uid && cached.role) {
+      await new Promise(r => setTimeout(r, 0)); // نستناو باقي البرنامج يتحمّل
+      S.role = cached.role; S.me = {name: cached.name || "—"};
+      const h0 = location.hash.slice(1); S.tab = myTabs().some(t => t.k === h0) ? h0 : (ls("lp_openpos") ? "pos" : "home");
+      startData(); layout();
+      resolveRole(u).then(r => {
+        if (r.role) { ls("lp_role", {uid: u.uid, role: r.role, name: r.name}); if (r.role !== cached.role) location.reload(); }
+        else if (!r.err) { ls("lp_role", null); location.reload(); }
+      });
+      return;
+    }
     loginScreen(`<p>... نتأكدو من الحساب</p>`);
     const r = await resolveRole(u);
     if (r.err) return loginScreen(`<div class="note bad">ما قدرتش نوصل لقاعدة البيانات. شوف الأنترنت وعاود.</div><button class="btn" onclick="location.reload()">🔄 عاود</button>`);
@@ -857,6 +870,7 @@ window.addEventListener("hashchange", () => { const k = location.hash.slice(1); 
     if (r.off) return loginScreen(`<div class="note bad">الحساب تاعك راهو موقّف. كلّم مول المحل.</div>`);
     if (r.none) return loginScreen(`<div class="note bad">الحساب <bdi>${esc(u.email || "")}</bdi> ما عندوش الصلاحية. قول لمول المحل يزيدك في «الإعدادات ← الخدامين».</div>`);
     S.role = r.role; S.me = {name: r.name || "—"};
+    ls("lp_role", {uid: u.uid, role: r.role, name: r.name});
     const h = location.hash.slice(1); S.tab = myTabs().some(t => t.k === h) ? h : (ls("lp_openpos") ? "pos" : "home");
     startData(); layout();
   });
