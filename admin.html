@@ -402,7 +402,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.3";
+const APP_VERSION = "1.1.4";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -2037,7 +2037,7 @@ function pdAct(k) {
   if (k === "debt") { if (!S.cart.length) return toast("البون فارغ"); S.ui.autoPrint = true; return payDebt(); }
   if (k === "ret") return openDaySales("ret");
   if (k === "list") return openDaySales("list");
-  if (k === "exit") { clearInterval(PD_CLOCK); if (sessionStorage.getItem("lp_pin")) return pinLogout(); return go("home"); }
+  if (k === "exit") { clearInterval(PD_CLOCK); return go("home"); } // خروج من الكاسة ← الرئيسية (فيها الإعدادات والقفل)
   if (k === "qty") { if (!it) return toast("اختار سطر"); const v = takeMult(); if (v == null) return toast("اكتب الكمية في الأرقام من بعد اضغط «الكمية»"); it.qty = it.unit === "kg" ? r2(v >= 20 ? v / 1000 : v) : v; saveCart(); drawPD(); posFocus(); return; }
   if (k === "price") { if (!it) return toast("اختار سطر"); const v = takeMult(); if (v == null) return cartPrice(i); it.price = v; saveCart(); drawPD(); posFocus(); return; }
   if (k === "del") { if (!it) return; S.cart.splice(i, 1); S.ui.sel = Math.min(i, S.cart.length - 1); saveCart(); drawPD(); posFocus(); }
