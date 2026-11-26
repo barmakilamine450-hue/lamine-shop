@@ -396,7 +396,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -453,10 +453,10 @@ async function doUpdate() {
 setTimeout(checkUpdate, 8000); setInterval(checkUpdate, 30 * 60 * 1000);
 
 // طباعة التيكي وحدو (Xprinter 80 مم): ننسخوه برّا النافذة باش يتطبع كامل
-function printBon() {
-  const b = document.getElementById("bonPrint"); if (!b) return;
+function printBon(html) {
+  const b = document.getElementById("bonPrint"); if (!html && !b) return;
   let pa = document.getElementById("printArea"); if (pa) pa.remove();
-  pa = document.createElement("div"); pa.id = "printArea"; pa.innerHTML = b.outerHTML.replace('id="bonPrint"', "");
+  pa = document.createElement("div"); pa.id = "printArea"; pa.innerHTML = (html || b.outerHTML).replace('id="bonPrint"', "");
   document.body.appendChild(pa);
   // طول الورقة = طول التيكي برك (الطابعة ما تخرجش ورق فارغ)
   const fit = () => {
@@ -1166,7 +1166,7 @@ function drawDc() {
     || `<div class="empty" style="padding:16px">ما كاين حتى زبون. اضغط ➕ باش تزيد واحد</div>`;
 }
 let SALE_BUSY = false;
-async function doSale(pay) {
+async function doSale(pay, quick) {
   if (SALE_BUSY || !S.cart.length) return;
   let cid = null, cname = "", paid = cartTot();
   if (pay === "debt") {
@@ -1194,7 +1194,11 @@ async function doSale(pay) {
   catch (e) { SALE_BUSY = false; if (btn) btn.disabled = false; return; }
   if (!own) { const my = ls(myDayKey()) || {n: 0, t: 0}; ls(myDayKey(), {n: my.n + 1, t: my.t + total}); }
   S.cart = []; S.ui.disc = 0; S.ui.cust = null; saveCart(); SALE_BUSY = false;
-  showTicket({id, ...sale}, true, S.ui.autoPrint); S.ui.autoPrint = false;
+  if (quick) { // ديراكت: يطبع (إذا «بيع + طباعة») بلا ما يحل نافذة، والبون الجديد واجد
+    closeModal(); toast(`✅ تسجّلت البيعة #${code} · ${fmt(total)}`, 2500);
+    if (S.ui.autoPrint) printBon(ticketHTML({id, ...sale}));
+  } else showTicket({id, ...sale}, true, S.ui.autoPrint);
+  S.ui.autoPrint = false;
   if ($("#pd")) drawPD();
   if (S.tab === "pos") VIEWS.pos.draw();
   sendStockMsgs(msgs);
@@ -1930,7 +1934,7 @@ function renderPD() {
     ["sell", "✔️", "بيع", "F11", "g"], ["sellp", "🖨️", "بيع + طباعة", "F12", "b"],
     ["new", "➕", "بون جديد", "F2", ""], ["hold", "⏸️", "علّق البون", "F8", ""],
     ["cancel", "✖️", "إلغاء البون", "F10", "r"],
-    ...(own ? [["cust", "👤", "زبون (كريدي)", "F6", ""], ["ret", "↩️", "استرجاع", "F5", ""], ["list", "📋", "بيعات اليوم", "F7", ""]] : []),
+    ...(own ? [["debt", "📒", "كريدي / ناقص", "F6", ""], ["ret", "↩️", "استرجاع", "F5", ""], ["list", "📋", "بيعات اليوم", "F7", ""]] : []),
     ["exit", "🚪", "خروج", "F9", "x"]
   ];
   setTimeout(() => { clearInterval(PD_CLOCK); PD_CLOCK = setInterval(() => { const c = $("#pdclock"); if (!c) return clearInterval(PD_CLOCK); c.textContent = new Date().toLocaleTimeString("fr-FR"); }, 1000); }, 0);
@@ -2015,13 +2019,15 @@ function pdAct(k) {
   if (k === "sell" || k === "sellp") {
     if (!S.cart.length) return toast("البون فارغ");
     S.ui.autoPrint = k === "sellp";
-    if (S.ui.cust && isOwner()) { payDebt(); S.ui.dc = S.ui.cust; drawDc(); } else payCash();
+    // كيما سهلها: البيعة تتسجّل ديراكت نقداً (بلا «شحال عطاك»)، والكريدي/الناقص بزر «كريدي / ناقص»
+    if (S.ui.cust && isOwner()) { payDebt(); S.ui.dc = S.ui.cust; drawDc(); } else doSale("cash", true);
     return;
   }
   if (k === "new") { if (S.cart.length) holdTicket(true); S.ui.cust = null; drawPD(); posFocus(); return; }
   if (k === "hold") { if (!S.cart.length) return toast("البون فارغ"); holdTicket(); return; }
   if (k === "cancel") { if (!S.cart.length) return; return ask("تلغي هاد البون؟", () => { S.cart = []; S.ui.disc = 0; S.ui.cust = null; saveCart(); drawPD(); posFocus(); }, "إيه، ألغيه"); }
   if (k === "cust") return chooseCust();
+  if (k === "debt") { if (!S.cart.length) return toast("البون فارغ"); S.ui.autoPrint = true; return payDebt(); }
   if (k === "ret") return openDaySales("ret");
   if (k === "list") return openDaySales("list");
   if (k === "exit") { clearInterval(PD_CLOCK); if (sessionStorage.getItem("lp_pin")) return pinLogout(); return go("home"); }
@@ -2067,7 +2073,7 @@ document.addEventListener("keydown", e => {
   const k = e.key;
   if (S.tab === "pos" && $("#pd")) {
     if ($("#ov")) { if (k === "Escape") { closeModal(); posFocus(); } return; }
-    const map = {F2: "new", F3: "qty", F4: "price", F5: "ret", F6: "cust", F7: "list", F8: "hold", F9: "exit", F10: "cancel", F11: "sell", F12: "sellp"};
+    const map = {F2: "new", F3: "qty", F4: "price", F5: "ret", F6: "debt", F7: "list", F8: "hold", F9: "exit", F10: "cancel", F11: "sell", F12: "sellp"};
     if (map[k]) { e.preventDefault(); pdAct(map[k]); return; }
     const inInput = document.activeElement && document.activeElement.id === "pq";
     if (k === "Delete" && (!inInput || !e.target.value)) { e.preventDefault(); pdAct("del"); return; }
