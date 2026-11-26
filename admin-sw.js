@@ -10,7 +10,7 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (u.origin !== location.origin) return;
-  // يتحل من الذاكرة ديراكت (سريع وبلا أنترنت)، ويجيب النسخة الجديدة في الخلف للمرة الجاية
-  const net = fetch(r).then(res => { if (res.ok) { const cp = res.clone(); caches.open(C).then(c => c.put(r, cp)); } return res; });
+  // يتحل من الذاكرة ديراكت (سريع وبلا أنترنت)، ويجيب النسخة الجديدة في الخلف للمرة الجاية (بلا كاش GitHub)
+  const net = fetch(r.url, {cache: "no-cache", credentials: "same-origin"}).then(res => { if (res.ok) { const cp = res.clone(); caches.open(C).then(c => c.put(r, cp)); } return res; });
   e.respondWith(caches.match(r, {ignoreSearch: true}).then(m => { if (m) { e.waitUntil(net.catch(() => {})); return m; } return net; }).catch(() => net));
 });
