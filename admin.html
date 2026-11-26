@@ -384,7 +384,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.0.3";
+const APP_VERSION = "1.0.4";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -444,6 +444,13 @@ const Fire = {
   watch(col, cb, o) { return this.q(col, o).onSnapshot(s => cb(s.docs.map(d => ({id: d.id, ...d.data()}))), e => { console.error(col, e); cb(null, e); }); },
   watchDoc(col, id, cb) { return this.db.collection(col).doc(id).onSnapshot(d => cb(d.exists ? {id: d.id, ...d.data()} : null), e => { console.error(col, id, e); cb(null, e); }); },
   async get(col, id) { const d = await this.db.collection(col).doc(id).get(); return d.exists ? {id: d.id, ...d.data()} : null; },
+  // من الذاكرة أولا (سريع وبلا أنترنت)، وإلا من السيرفر مع حد للوقت
+  async getFast(col, id) {
+    const ref = this.db.collection(col).doc(id);
+    try { const d = await ref.get({source: "cache"}); if (d.exists) return {id: d.id, ...d.data()}; } catch (e) {}
+    const d = await Promise.race([ref.get(), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 15000))]);
+    return d.exists ? {id: d.id, ...d.data()} : null;
+  },
   async list(col, o) { const s = await this.q(col, o).get(); return s.docs.map(d => ({id: d.id, ...d.data()})); },
   set(col, id, d, merge) { return this.db.collection(col).doc(id).set(d, merge ? {merge: true} : {}); },
   update(col, id, d) { return this.db.collection(col).doc(id).update(d); },
@@ -611,13 +618,14 @@ async function dailyDigest(force=false) {
 /* ============================================================
    الدخول والصلاحيات
    ============================================================ */
-async function resolveRole(u) {
-  const owner = await DB.get("config", "owner").catch(e => { console.error(e); return undefined; });
+async function resolveRole(u, fast) {
+  const get = (c, i) => (fast && DB.getFast ? DB.getFast(c, i) : DB.get(c, i));
+  const owner = await get("config", "owner").catch(e => { console.error(e); return undefined; });
   if (owner === undefined) return {err: "net"};
   if (!owner) return {claim: true};
   S.owner = owner;
   if (owner.uid === u.uid) return {role: "owner", name: owner.name || u.displayName || "مول المحل"};
-  const st = await DB.get("staff", u.uid).catch(() => null);
+  const st = await get("staff", u.uid).catch(() => null);
   if (st && st.active) return {role: "worker", name: st.name || u.displayName};
   if (st && !st.active) return {off: true};
   const email = (u.email || "").toLowerCase();
@@ -864,7 +872,7 @@ window.addEventListener("hashchange", () => { const k = location.hash.slice(1); 
       return;
     }
     loginScreen(`<p>... نتأكدو من الحساب</p>`);
-    const r = await resolveRole(u);
+    const r = await resolveRole(u, true);
     if (r.err) return loginScreen(`<div class="note bad">ما قدرتش نوصل لقاعدة البيانات. شوف الأنترنت وعاود.</div><button class="btn" onclick="location.reload()">🔄 عاود</button>`);
     if (r.claim) return loginScreen(`<div class="note info">هاد البرنامج مازال ما عندو مول. إذا راك <b>مول المحل</b>، اضغط هنا باش تسجّل حسابك (<bdi>${esc(u.email || "")}</bdi>) كمالك. هاد الخطوة تتدار مرة وحدة برك.</div><button class="btn" onclick="claimOwner()">👑 أنا مول المحل</button>`);
     if (r.off) return loginScreen(`<div class="note bad">الحساب تاعك راهو موقّف. كلّم مول المحل.</div>`);
