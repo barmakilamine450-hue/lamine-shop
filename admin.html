@@ -402,7 +402,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.4";
+const APP_VERSION = "1.1.5";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -459,22 +459,32 @@ async function doUpdate() {
 setTimeout(checkUpdate, 8000); setInterval(checkUpdate, 30 * 60 * 1000);
 
 // طباعة التيكي وحدو (Xprinter 80 مم): ننسخوه برّا النافذة باش يتطبع كامل
+// طباعة التيكي (Xprinter 80 مم) في إطار مخفي خاص بيه: ما يتمسحش قبل ما تكمل الطباعة
 function printBon(html) {
   const b = document.getElementById("bonPrint"); if (!html && !b) return;
-  let pa = document.getElementById("printArea"); if (pa) pa.remove();
-  pa = document.createElement("div"); pa.id = "printArea"; pa.innerHTML = (html || b.outerHTML).replace('id="bonPrint"', "");
-  document.body.appendChild(pa);
-  // طول الورقة = طول التيكي برك (الطابعة ما تخرجش ورق فارغ)
-  const fit = () => {
-    pa.style.cssText = "display:block;position:absolute;left:-9999px;top:0;width:72mm;padding:2mm 0 6mm";
-    const mm = Math.ceil(pa.offsetHeight * 25.4 / 96) + 4; pa.style.cssText = "";
-    let st = document.getElementById("printPage"); if (!st) { st = document.createElement("style"); st.id = "printPage"; document.head.appendChild(st); }
-    st.textContent = `@page{margin:0}`; // بلا مقاس خاص: الطابعة تستعمل الورق تاعها (الطابعات الحرارية ترفض أحياناً المقاسات الخاصة)
-  };
-  const done = () => { window.removeEventListener("afterprint", done); setTimeout(() => pa.remove(), 300); };
-  window.addEventListener("afterprint", done);
-  const imgs = [...pa.querySelectorAll("img")];
-  Promise.all(imgs.map(i => i.complete ? 1 : new Promise(r => { i.onload = i.onerror = r; }))).then(() => { fit(); setTimeout(() => window.print(), 60); });
+  const body = (html || b.outerHTML).replace('id="bonPrint"', "");
+  const old = document.getElementById("printFrame"); if (old) old.remove();
+  const f = document.createElement("iframe"); f.id = "printFrame"; f.setAttribute("aria-hidden", "true");
+  f.style.cssText = "position:fixed;left:-10000px;top:0;width:80mm;height:200mm;border:0;visibility:hidden";
+  document.body.appendChild(f);
+  const css = [...document.querySelectorAll("style")].map(x => x.textContent).join("\n");
+  const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(x => x.outerHTML).join("");
+  const d = f.contentDocument;
+  d.open();
+  d.write(`<!DOCTYPE html><html lang="ar"><head><meta charset="utf-8"><title> </title>${links}<style>${css}
+    @page{margin:0}
+    html,body{margin:0!important;padding:0!important;background:#fff!important;min-height:0!important;height:auto!important;overflow:visible!important}
+    #printArea{display:block!important;width:72mm;margin:0 auto;padding:2mm 0 6mm}
+    #printArea .bon{width:72mm!important;max-width:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin:0!important}
+    #printArea .band,#printArea th,#printArea .tot,#printArea .cli span:first-child{background:#fff!important;color:#000!important}
+    #printArea .band{border:2px solid #000}#printArea .tot{border-radius:0}#printArea .tot small{opacity:1}#printArea .logo{width:56px}
+  </style></head><body><div id="printArea">${body}</div></body></html>`);
+  d.close();
+  const go = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.error(e); toast("❌ ما قدرتش نطبع: " + e.message, 5000); } };
+  const imgs = [...d.images];
+  const fonts = d.fonts && d.fonts.ready ? d.fonts.ready.catch(() => {}) : Promise.resolve();
+  Promise.race([Promise.all([fonts, ...imgs.map(i => i.complete ? 1 : new Promise(r => { i.onload = i.onerror = r; }))]), new Promise(r => setTimeout(r, 1500))])
+    .then(() => setTimeout(go, 80));
 }
 let YES = null;
 function ask(q, fn, yes="نعم", danger=true) { YES = fn; modal(`<h2>${q}</h2><div class="bonacts"><button class="btn ${danger?"red":""}" onclick="const f=YES;YES=null;closeModal();f&&f()">${yes}</button><button class="btn ghost" onclick="closeModal()">لا</button></div>`); }
