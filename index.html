@@ -132,6 +132,7 @@ footer a{color:var(--brand-d);font-weight:700;text-decoration:none}
 
 /* البون */
 .bonwrap{display:flex;justify-content:center;padding:4px 0 10px}
+.bonacts.stick{position:sticky;bottom:-1px;z-index:5;background:var(--card,#fff);padding:10px 0 6px;box-shadow:0 -10px 18px rgba(255,255,255,.95)}
 .bon{width:340px;max-width:100%;background:#fff;color:#111;font-family:"Segoe UI",Tahoma,Arial,sans-serif;direction:ltr;padding:14px 12px 12px;border:1px solid #e6e6e6;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.08)}
 .bon .c{text-align:center}
 .bon .logo{width:84px;height:auto;margin:0 auto 4px;display:block}
@@ -382,9 +383,10 @@ function openCheckout(){
     <label class="f">ملاحظة (اختياري)</label><textarea class="in" id="c_nt" rows="2" placeholder="مثلاً: نحب التوصيل للدار"></textarea>
     <div class="total"><span>المجموع</span><span>${fmt(cartTotal())}</span></div>
     <div class="err" id="c_err"></div>
-    <button class="btn" id="c_go" onclick="submitOrder()">✅ تأكيد الطلب</button>`);
+    <button class="btn" id="c_go" onclick="previewOrder()">🧾 شوف البون ←</button>`);
 }
-async function submitOrder(){
+let PENDING=null;
+function previewOrder(){
   const v=id=>$("#"+id).value.trim();
   const c={fn:v("c_fn"),ln:v("c_ln"),ph:v("c_ph").replace(/\s/g,""),w:v("c_w"),ad:v("c_ad"),nt:v("c_nt")};
   const e=$("#c_err");
@@ -394,20 +396,29 @@ async function submitOrder(){
   if(!c.ad){e.textContent="اكتب البلدية ولا العنوان";return}
   ls("le_cust",{fn:c.fn,ln:c.ln,ph:c.ph,w:c.w,ad:c.ad});
   const code=String(Math.floor(100000+Math.random()*900000));
-  const order={id:uid(),code,ts:Date.now(),status:"new",
+  PENDING={id:uid(),code,ts:Date.now(),status:"new",
     customer:{first:c.fn,last:c.ln,phone:c.ph,wilaya:Number(c.w),wilayaName:WILAYAS[c.w-1],address:c.ad,note:c.nt},
     items:S.cart.map(i=>({pid:i.pid,name:i.name,unit:i.unit,unitName:i.unitName,price:i.price,grams:i.grams,qty:i.qty,label:cartQtyLabel(i),total:Math.round(cartLineTotal(i))})),
     total:Math.round(cartTotal())};
-  $("#c_go").disabled=true;$("#c_go").textContent="... جاري الإرسال";
-  try{ await DB.createOrder(order); }
-  catch(err){console.error(err);e.textContent="ما تبعثش الطلب، عاود جرب ولا اتصل بنا";$("#c_go").disabled=false;$("#c_go").textContent="✅ تأكيد الطلب";return}
-  S.cart=[];saveCart();renderShop();
-  const msg=`سلام، طلبية جديدة رقم ${code}\n${order.items.map(i=>`- ${i.name}: ${i.label} = ${fmt(i.total)}`).join("\n")}\nالمجموع: ${fmt(order.total)}\n${c.fn} ${c.ln} — ${c.ph}\n${String(c.w).padStart(2,"0")} ${WILAYAS[c.w-1]} — ${c.ad}`;
-  openBon(order, `<div class="okbox"><div class="big">🎉</div><h2 style="justify-content:center;margin:0">وصلنا الطلب تاعك!</h2>
-    <p style="color:var(--muted);margin:6px 0">نتصلو بيك قريب باش نأكدو الطلب وثمن التوصيل. هذا البون تاعك:</p></div>`);
-  const wa=document.createElement("a");wa.className="btn green";wa.style.marginTop="8px";wa.target="_blank";
-  wa.href=`https://wa.me/${waNum(SHOP.whatsapp)}?text=${encodeURIComponent(msg)}`;wa.textContent="💬 ابعث الطلب على الواتساب كذلك";
-  $(".bonacts").after(wa);
+  modal(`<h2>البون تاعك<button class="x" onclick="closeModal()">×</button></h2>
+    <div class="bonwrap">${bonHTML(PENDING)}</div>
+    <div class="err" id="o_err"></div>
+    <div class="bonacts stick"><button class="btn green" id="o_wa" onclick="sendOrder(true)">💬 ابعث على واتساب</button><button class="btn" id="o_ok" onclick="sendOrder(false)">✅ أكّد الطلبية</button></div>
+    <button class="btn ghost" style="margin-top:8px" onclick="openCheckout()">✏️ بدّل المعلومات</button>`);
+}
+function orderMsg(o){const c=o.customer;return `سلام، طلبية جديدة رقم ${o.code}\n${o.items.map(i=>`- ${i.name}: ${i.label} = ${fmt(i.total)}`).join("\n")}\nالمجموع: ${fmt(o.total)}\n${c.first} ${c.last} — ${c.phone}\n${String(c.wilaya).padStart(2,"0")} ${c.wilayaName} — ${c.address}${c.note?"\nملاحظة: "+c.note:""}`}
+async function sendOrder(wa){
+  const o=PENDING; if(!o) return;
+  const win=wa?window.open("","_blank"):null;
+  const b1=$("#o_wa"),b2=$("#o_ok"); b1.disabled=b2.disabled=true; (wa?b1:b2).textContent="... جاري الإرسال";
+  try{ await DB.createOrder({...o,via:wa?"whatsapp":"site"}); }
+  catch(err){console.error(err); if(win) win.close(); $("#o_err").textContent="ما تبعثش الطلب، عاود جرب ولا اتصل بنا"; b1.disabled=b2.disabled=false; b1.textContent="💬 ابعث على واتساب"; b2.textContent="✅ أكّد الطلبية"; return}
+  if(win){ win.location.href=`https://wa.me/${waNum(SHOP.whatsapp)}?text=${encodeURIComponent(orderMsg(o))}`; }
+  S.cart=[];saveCart();renderShop(); PENDING=null;
+  modal(`<div class="okbox"><div class="big">🎉</div><h2 style="justify-content:center;margin:0">وصلنا الطلب تاعك!</h2>
+    <p style="color:var(--muted);margin:6px 0">نتصلو بيك قريب باش نأكدو الطلب وثمن التوصيل.</p></div>
+    <div class="bonwrap">${bonHTML(o)}</div>
+    <button class="btn ghost" onclick="closeModal()">إغلاق</button>`);
 }
 function waNum(p){p=String(p).replace(/\D/g,"");return p.startsWith("0")?"213"+p.slice(1):p}
 
@@ -415,6 +426,7 @@ function waNum(p){p=String(p).replace(/\D/g,"");return p.startsWith("0")?"213"+p
 /* ============================================================
    البون (Ticket)
    ============================================================ */
+const fmtN = n => Math.round(+n||0).toLocaleString("fr-FR").replace(/\u202f|\u00a0/g," ");
 const fmtDA = n => (Math.round(n*100)/100).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/ | /g," ");
 function bonWeight(i){ if(i.unit!=="kg") return null; const g=i.grams; return g>=1000 ? (g/1000).toString().replace(".",",")+" kg" : g+" g"; }
 function bonHTML(x){
@@ -434,14 +446,13 @@ function bonHTML(x){
       <div><span>Adresse<br>العنوان</span><span>${esc(c.address)}</span></div>
     </div>
     <table>
-      <thead><tr><th style="width:42%">Article<br>السلعة</th><th>Qté<br>الكمية</th><th>Poids<br>الوزن</th><th>Montant<br>المبلغ</th></tr></thead>
-      <tbody>${items.map(i=>{const w=bonWeight(i);return `<tr><td class="n">${esc(i.name)}</td><td><b>${i.qty||1}</b>${i.unit!=="kg"&&i.unitName?`<br><small>${esc(i.unitName)}</small>`:""}</td><td class="${w?"":"d"}">${w||"—"}</td><td class="m">${fmtDA(i.total)}</td></tr>`}).join("")}</tbody>
+      <thead><tr><th style="width:40%">Article<br>السلعة</th><th>Qté<br>الكمية</th><th>P.U<br>السعر</th><th>Montant<br>المبلغ</th></tr></thead>
+      <tbody>${items.map(i=>{const w=bonWeight(i);return `<tr><td class="n">${esc(i.name)}</td><td><b>${w?((i.qty>1?i.qty+" × ":"")+w):(i.qty||1)}</b>${!w&&i.unitName?`<br><small>${esc(i.unitName)}</small>`:""}</td><td>${fmtN(i.price)}${w?"<br><small>/kg</small>":""}</td><td class="m">${fmtN(i.total)}</td></tr>`}).join("")}</tbody>
     </table>
     <div class="kv"><span>Nombre d'articles · عدد السلع</span><b>${nb}</b></div>
-    <div class="tot"><span>TOTAL<small>المجموع</small></span><span>${fmtDA(x.total||0)} DA</span></div>
+    <div class="tot"><span>TOTAL<small>المجموع</small></span><span>${fmtN(x.total||0)} DA</span></div>
     <div class="kv"><span>Paiement</span><b>${esc(SHOP.payment)}</b></div>
     <div class="kv"><span>Livraison</span><b>يتأكد في الهاتف</b></div>
-    <div class="bc" id="bonBc"></div>
     <div class="dash"></div>
     <div class="merci"><b>merci !</b><br>Merci de votre confiance · شكرا على ثقتكم</div>
   </div>`;
