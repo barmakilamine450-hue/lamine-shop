@@ -369,6 +369,16 @@ select.in{appearance:none;-webkit-appearance:none;background-image:linear-gradie
 .pd-groups button.on{background:#1F8F4E;color:#fff;border-color:#0E5C30}.pd-groups button.on small{color:rgba(255,255,255,.8)}
 @media(max-height:700px){.pd-main{grid-template-rows:auto auto minmax(0,1fr) minmax(150px,30vh)}.pd-total b{font-size:30px}.kpg button{font-size:18px}}
 
+/* ===== 🔐 الدخول بالكود ===== */
+.pinlog img{width:90px;height:90px;border-radius:24px;margin-bottom:8px}
+.pclock{font-size:14px;color:var(--muted);margin-bottom:6px}
+.pdots{font-size:34px;letter-spacing:12px;min-height:48px;margin:8px 0 2px;color:var(--ink,#24140C)}
+.perr{color:#C62828;font-weight:700;min-height:22px}
+.ppad{display:grid;grid-template-columns:repeat(3,92px);gap:12px;justify-content:center;margin-top:8px;direction:ltr}
+.pk{height:76px;border:0;border-radius:20px;background:#fff;box-shadow:var(--shadow);font-size:30px;font-weight:800;color:#24140C;cursor:pointer;font-family:inherit}
+.pk:active{transform:scale(.96);background:#FFE6D2}
+.ppad .pk:last-child{background:var(--brand,#E8721C);color:#fff}
+
 </style>
 </head>
 <body>
@@ -386,7 +396,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.0.6";
+const APP_VERSION = "1.1.0";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -765,7 +775,9 @@ const TABS = [
   {k: "reports", i: "📊", t: "التقارير", owner: true},
   {k: "settings", i: "⚙️", t: "الإعدادات"}
 ];
-const myTabs = () => TABS.filter(t => !t.owner || isOwner());
+const myTabs = () => TABS.filter(t => (!t.owner || isOwner()) && !(S.lvl === "admin" && t.k === "reports"));
+// الكود يتطلب غير لمول المحل (حساب Google) وفي البرنامج الحقيقي
+const usePin = () => S.role === "owner" && typeof DEMO_BUILD === "undefined" && typeof lockOn === "function" && lockOn();
 function badgeOf(k) {
   if (k === "orders") return S.orders.filter(o => o.status === "new").length;
   if (k === "stock") return S.products.filter(p => ["out", "low"].includes(stockState(p.id))).length;
@@ -906,7 +918,7 @@ window.addEventListener("hashchange", () => { const k = location.hash.slice(1); 
       await new Promise(r => setTimeout(r, 0)); // نستناو باقي البرنامج يتحمّل
       S.role = cached.role; S.me = {name: cached.name || "—"};
       const h0 = location.hash.slice(1); S.tab = myTabs().some(t => t.k === h0) ? h0 : (ls("lp_openpos") ? "pos" : "home");
-      startData(); layout();
+      if (usePin()) pinGate(cached.name); else { startData(); layout(); }
       resolveRole(u).then(r => {
         if (r.role) { ls("lp_role", {uid: u.uid, role: r.role, name: r.name}); if (r.role !== cached.role) location.reload(); }
         else if (!r.err) { ls("lp_role", null); location.reload(); }
@@ -921,6 +933,7 @@ window.addEventListener("hashchange", () => { const k = location.hash.slice(1); 
     if (r.none) return loginScreen(`<div class="note bad">الحساب <bdi>${esc(u.email || "")}</bdi> ما عندوش الصلاحية. قول لمول المحل يزيدك في «الإعدادات ← الخدامين».</div>`);
     S.role = r.role; S.me = {name: r.name || "—"};
     ls("lp_role", {uid: u.uid, role: r.role, name: r.name});
+    if (usePin()) return pinGate(r.name);
     const h = location.hash.slice(1); S.tab = myTabs().some(t => t.k === h) ? h : (ls("lp_openpos") ? "pos" : "home");
     startData(); layout();
   });
@@ -947,7 +960,7 @@ VIEWS.home = {
     return `<div class="ptitle"><div><h1>${hello()}، ${esc(S.me.name.split(" ")[0])} 👋</h1><small class="muted">${d.toLocaleDateString("ar-DZ", {weekday: "long", day: "numeric", month: "long"})}</small></div></div>
     ${own && !S.pro.ntfy ? `<div class="alert info" onclick="go('settings');setTimeout(()=>openNotif(),60)"><i>🔔</i><div>فعّل الإشعارات باش يوصلك تنبيه كي تكمل سلعة ولا تقرب صلاحيتها<br><small>تاخذ دقيقتين</small></div><span class="go">←</span></div>` : ""}
     <div class="kpis">
-      ${own ? `<div class="kpi dark"><span class="ic">💰</span><small>مبيعات اليوم</small><b>${fmt(sum)}</b><small>${sales.length} بيعة</small></div>
+      ${own && S.lvl !== "admin" ? `<div class="kpi dark"><span class="ic">💰</span><small>مبيعات اليوم</small><b>${fmt(sum)}</b><small>${sales.length} بيعة</small></div>
       <div class="kpi or"><span class="ic">📈</span><small>ربح اليوم</small><b>${fmt(prof)}</b><small>بعد سعر الشراء</small></div>`
       : `<div class="kpi dark"><span class="ic">🧾</span><small>بيعاتي اليوم</small><b><bdi>${my.n}</bdi></b><small>${fmt(my.t)}</small></div>`}
       <div class="kpi" onclick="go('orders')"><span class="ic">🛒</span><small>طلبيات جديدة</small><b><bdi>${newO.length}</bdi></b><small>من الموقع</small></div>
@@ -1804,12 +1817,16 @@ VIEWS.settings = {
         ${own ? `<div class="it" onclick="openAlertsCfg()"><div class="th">⚠️</div><div class="t"><b>حدود التنبيه</b><small>السلعة القليلة، أيام الصلاحية، وقت الملخّص</small></div><span>←</span></div>
         <div class="it" onclick="openShopCfg()"><div class="th">🏪</div><div class="t"><b>معلومات المحل</b><small>الاسم، الشعار، الأرقام، البون</small></div><span>←</span></div>
         <div class="it" onclick="openStaff()"><div class="th">👥</div><div class="t"><b>الخدامين</b><small>${S.staff.filter(s => s.active).length} خدام · زيد ولا وقّف</small></div><span>←</span></div>
+        ${S.lvl !== "admin" ? `<div class="it" onclick="openPins()"><div class="th">🔐</div><div class="t"><b>الكودات</b><small>المدير، الأدمن، العامل · كل واحد بالكود تاعو</small></div><span>←</span></div>
+        <div class="it" onclick="ls('lp_lock',!lockOn());renderPage();toast(lockOn()?'🔐 الكود يتطلب كي يتحل البرنامج في هاد الجهاز':'الكود ما يتطلبش في هاد الجهاز')"><div class="th">🔒</div><div class="t"><b>اطلب الكود في هاد الجهاز</b><small>${lockOn() ? "✅ مشعولة" : "⛔ مطفية"}</small></div><span>←</span></div>` : ""}
         <div class="it" onclick="backup()"><div class="th">💾</div><div class="t"><b>نسخة احتياطية</b><small>حمّل كامل البيانات في ملف</small></div><span>←</span></div>` : ""}
         <div class="it" onclick="ls('lp_openpos',!ls('lp_openpos'));renderPage();toast(ls('lp_openpos')?'✅ الكاسة تتحل مباشرة في هاد الجهاز':'الرئيسية تتحل في الأول')"><div class="th">🖥️</div><div class="t"><b>فتح الكاسة مباشرة</b><small>في هاد الجهاز: كي تدخل تتحل الكاسة ديريكت</small></div><span class="pill ${ls("lp_openpos") ? "p-ok" : "p-mut"}">${ls("lp_openpos") ? "مشعول" : "مطفي"}</span></div>
         <a class="it" href="./" style="text-decoration:none;color:inherit"><div class="th">🛍️</div><div class="t"><b>صفحة الزبائن</b><small>الموقع اللي يشوفو الزبائن</small></div><span>←</span></a>
       </div>
       <div class="card"><h3>👤 الحساب</h3><p style="margin:0 0 10px">${esc(S.me.name)} · <span class="pill ${own ? "p-ok" : "p-info"}">${own ? "👑 مول المحل" : "🧑‍🔧 خدام"}</span><br><small class="muted"><bdi>${esc(S.user.email || "")}</bdi></small></p>
-        <button class="btn ghost" onclick="ask('تخرج من الحساب؟',()=>DB.signOut(),'خروج')">🚪 خروج</button></div>
+        ${sessionStorage.getItem("lp_pin") ? `<button class="btn dark" onclick="pinLogout()">🔒 خروج (قفل بالكود)</button>
+        ${S.lvl === "manager" ? `<button class="btn ghost" style="margin-top:8px" onclick="ask('تخرج من حساب Google في هاد الجهاز؟',()=>{sessionStorage.removeItem('lp_pin');DB.signOut()},'خروج')">🚪 خروج من حساب Google</button>` : ""}`
+        : `<button class="btn ghost" onclick="ask('تخرج من الحساب؟',()=>DB.signOut(),'خروج')">🚪 خروج</button>`}</div>
       <p class="muted" style="text-align:center;font-size:13px">Lamine Pro · النسخة ${APP_VERSION}</p>`;
   }
 };
@@ -2007,7 +2024,7 @@ function pdAct(k) {
   if (k === "cust") return chooseCust();
   if (k === "ret") return openDaySales("ret");
   if (k === "list") return openDaySales("list");
-  if (k === "exit") { clearInterval(PD_CLOCK); return go("home"); }
+  if (k === "exit") { clearInterval(PD_CLOCK); if (sessionStorage.getItem("lp_pin")) return pinLogout(); return go("home"); }
   if (k === "qty") { if (!it) return toast("اختار سطر"); const v = takeMult(); if (v == null) return toast("اكتب الكمية في الأرقام من بعد اضغط «الكمية»"); it.qty = it.unit === "kg" ? r2(v >= 20 ? v / 1000 : v) : v; saveCart(); drawPD(); posFocus(); return; }
   if (k === "price") { if (!it) return toast("اختار سطر"); const v = takeMult(); if (v == null) return cartPrice(i); it.price = v; saveCart(); drawPD(); posFocus(); return; }
   if (k === "del") { if (!it) return; S.cart.splice(i, 1); S.ui.sel = Math.min(i, S.cart.length - 1); saveCart(); drawPD(); posFocus(); }
@@ -2064,6 +2081,115 @@ document.addEventListener("keydown", e => {
 });
 let PD_W = posDesk();
 window.addEventListener("resize", () => { const w = posDesk(); if (w !== PD_W) { PD_W = w; if (S.tab === "pos") layout(); } });
+
+/* ============================================================
+   🔐 الدخول بالكود (كيما سهلها): المدير، الأدمن، العامل
+   الجهاز يبقى داخل بحساب Google تاع مول المحل، وكل واحد يدخل بالكود تاعو.
+   ============================================================ */
+const LVL = {manager: "👑 المدير", admin: "🛡️ الأدمن", worker: "🧑‍🔧 العامل"};
+async function pinHash(pin) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("lamine-pro:" + pin));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+const lockOn = () => ls("lp_lock") !== false;
+let PIN_LIST = [], PIN_BUF = "", PIN_DONE = null, PIN_CLOCK = null;
+
+// يتنادى كي يدخل مول المحل بحساب Google
+async function pinGate(name) {
+  const pro = await (DB.getFast ? DB.getFast("settings", "pro") : DB.get("settings", "pro")).catch(() => null);
+  PIN_LIST = (pro && pro.pins) || [];
+  if (!PIN_LIST.length) return pinSetup(name);
+  const sid = sessionStorage.getItem("lp_pin");
+  const p = sid && PIN_LIST.find(x => x.id === sid);
+  if (p) return pinEnter(p);
+  pinLock();
+}
+function pinEnter(p) {
+  sessionStorage.setItem("lp_pin", p.id);
+  S.lvl = p.role; S.role = p.role === "worker" ? "worker" : "owner"; S.me = {name: p.name};
+  clearInterval(PIN_CLOCK);
+  const h = location.hash.slice(1); S.tab = myTabs().some(t => t.k === h) ? h : (ls("lp_openpos") ? "pos" : "home");
+  startData(); layout();
+}
+function pinLogout() { sessionStorage.removeItem("lp_pin"); location.hash = ""; location.reload(); }
+
+function pinScreen(title, sub, onDone) {
+  PIN_BUF = ""; PIN_DONE = onDone; clearInterval(PIN_CLOCK);
+  const k = n => `<button class="pk" onclick="pinKey('${n}')">${n === "del" ? "⌫" : n === "ok" ? "✓" : n}</button>`;
+  $("#app").innerHTML = `<div class="login pinlog"><img src="${LOGO}" alt=""><h1>${esc(SHOP.name || "Lamine Pro")}</h1>
+    <div class="pclock" id="pclock"></div>
+    <p style="margin:6px 0 2px"><b>${title}</b></p>${sub ? `<p class="muted" style="margin:0 0 6px;font-size:14px">${sub}</p>` : ""}
+    <div class="pdots" id="pdots"></div><div class="perr" id="perr"></div>
+    <div class="ppad">${["1","2","3","4","5","6","7","8","9","del","0","ok"].map(k).join("")}</div>
+    <p class="muted" style="font-size:13px;margin-top:14px">Lamine Pro · النسخة ${APP_VERSION}</p></div>`;
+  const tick = () => { const c = $("#pclock"); if (!c) return clearInterval(PIN_CLOCK); const d = new Date(); c.textContent = d.toLocaleDateString("ar-DZ", {weekday: "long", day: "numeric", month: "long"}) + " · " + d.toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"}); };
+  tick(); PIN_CLOCK = setInterval(tick, 15000); pinDraw();
+}
+function pinDraw() { const d = $("#pdots"); if (d) d.innerHTML = PIN_BUF.length ? "●".repeat(PIN_BUF.length) : `<span class="muted">— — — —</span>`; }
+function pinKey(k) {
+  const e = $("#perr"); if (e) e.textContent = "";
+  if (k === "del") PIN_BUF = PIN_BUF.slice(0, -1);
+  else if (k === "ok") { if (PIN_BUF.length >= 4 && PIN_DONE) PIN_DONE(PIN_BUF); else if (e) e.textContent = "الكود لازم 4 أرقام ولا كثر"; return; }
+  else if (PIN_BUF.length < 8) PIN_BUF += k;
+  pinDraw();
+}
+document.addEventListener("keydown", e => {
+  if (!$("#pdots")) return;
+  if (/^[0-9]$/.test(e.key)) { pinKey(e.key); e.preventDefault(); }
+  else if (e.key === "Backspace") { pinKey("del"); e.preventDefault(); }
+  else if (e.key === "Enter") { pinKey("ok"); e.preventDefault(); }
+});
+function pinLock() {
+  pinScreen("🔐 اكتب الكود تاعك", "", async code => {
+    const h = await pinHash(code), p = PIN_LIST.find(x => x.h === h);
+    if (p) return pinEnter(p);
+    PIN_BUF = ""; pinDraw(); const e = $("#perr"); if (e) e.textContent = "❌ الكود غالط";
+  });
+}
+function pinSetup(name) {
+  pinScreen("👑 اختار كود المدير", "4 أرقام ولا كثر، هو اللي تدخل بيه كل مرة", first => {
+    pinScreen("🔁 عاود اكتب نفس الكود", "", async again => {
+      if (again !== first) { toast("❌ الكودين ماشي كيف كيف، عاود"); return pinSetup(name); }
+      const p = {id: uid(), name: name || "المدير", role: "manager", h: await pinHash(first), ts: Date.now()};
+      try { await commitFast([{t: "set", c: "settings", id: "pro", d: {pins: [p]}, merge: true}]); } catch (e) { return toast("❌ ما تسجّلش: " + (e.code || e.message), 5000); }
+      PIN_LIST = [p]; toast("✅ تسجّل كود المدير"); pinEnter(p);
+    });
+  });
+}
+
+// ===== الإعدادات: الكودات =====
+function openPins() {
+  const pins = (S.pro && S.pro.pins) || PIN_LIST || [];
+  modal(`<h2>🔐 الكودات</h2>
+    <p class="muted" style="margin-top:0">كل واحد يدخل بالكود تاعو. <b>المدير</b> يشوف كلش. <b>الأدمن</b> كلش غير التقارير والأرباح والكودات. <b>العامل</b> الكاسة والمخزون والطلبيات برك (بلا أرباح ولا ديون).</p>
+    <div class="list">${pins.map(p => `<div class="it"><div class="th">${LVL[p.role].split(" ")[0]}</div><div class="t"><b>${esc(p.name)}</b><small>${LVL[p.role]}</small></div>
+      <button class="btn ghost sm" onclick="delPin('${p.id}')">حذف</button></div>`).join("")}</div>
+    <h3 style="margin:14px 0 6px">➕ زيد واحد</h3>
+    <label class="f">الاسم</label><input class="in" id="pn_name" placeholder="مثلاً: ياسين">
+    <label class="f">الدور</label><select class="in" id="pn_role"><option value="worker">🧑‍🔧 العامل</option><option value="admin">🛡️ الأدمن</option><option value="manager">👑 المدير</option></select>
+    <label class="f">الكود (4 أرقام ولا كثر)</label><input class="in" id="pn_code" inputmode="numeric" maxlength="8" dir="ltr" placeholder="••••">
+    <div class="bonacts"><button class="btn" onclick="addPin()">✅ سجّل</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
+}
+async function addPin() {
+  const name = $("#pn_name").value.trim(), role = $("#pn_role").value, code = $("#pn_code").value.trim();
+  if (!name) return toast("اكتب الاسم");
+  if (!/^\d{4,8}$/.test(code)) return toast("الكود لازم 4 حتى 8 أرقام");
+  const pins = [...((S.pro && S.pro.pins) || PIN_LIST || [])], h = await pinHash(code);
+  if (pins.some(p => p.h === h)) return toast("هاد الكود مستعمل، اختار واحد آخر");
+  pins.push({id: uid(), name, role, h, ts: Date.now()});
+  try { await commitFast([{t: "set", c: "settings", id: "pro", d: {pins}, merge: true}]); } catch (e) { return toast("❌ " + (e.code || e.message)); }
+  S.pro.pins = pins; PIN_LIST = pins; toast("✅ تسجّل " + name); openPins();
+}
+function delPin(id) {
+  const pins = (S.pro && S.pro.pins) || [];
+  const p = pins.find(x => x.id === id); if (!p) return;
+  if (p.role === "manager" && pins.filter(x => x.role === "manager").length < 2) return toast("لازم يبقى مدير واحد على الأقل");
+  ask(`نحذفو الكود تاع ${esc(p.name)}؟`, async () => {
+    const rest = pins.filter(x => x.id !== id);
+    try { await commitFast([{t: "set", c: "settings", id: "pro", d: {pins: rest}, merge: true}]); } catch (e) { return toast("❌ " + (e.code || e.message)); }
+    S.pro.pins = rest; PIN_LIST = rest; toast("تحذف"); openPins();
+  }, "حذف");
+}
 
 </script>
 </body>
