@@ -436,7 +436,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.4.1";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1556,10 +1556,10 @@ async function saveBatch() {
   EB.name = $("#b_name").value.trim(); EB.exp = $("#b_exp").value; EB.qty = $("#b_qty").value.trim(); EB.note = $("#b_note").value.trim(); bLink();
   if (!EB.name) return $("#b_err").textContent = "اكتب اسم السلعة";
   if (!/^\d{4}-\d\d-\d\d$/.test(EB.exp)) return $("#b_err").textContent = "اختار تاريخ الانتهاء";
-  const {id, ...d} = EB; d.ts = d.ts || Date.now(); d.by = S.me.name;
+  const {id, ...d} = EB; d.created = d.created || d.ts || Date.now(); d.ts = Date.now(); d.by = S.me.name; // ts = آخر تبديل (للمزامنة مع صلاحيتي)
   await commitFast([{t: "set", c: "batches", id, d}], "batch"); closeModal(); toast("✅ تحفظت — نعلمك قبل " + (EB.alerts.length ? Math.max(...EB.alerts) + " يوم" : "ما تفوت"));
 }
-async function batchDone(id) { await commitFast([{t: "update", c: "batches", id, d: {done: true, doneAt: Date.now()}}], "done"); closeModal(); toast("✔️ تنحات من القائمة"); }
+async function batchDone(id) { await commitFast([{t: "update", c: "batches", id, d: {done: true, doneAt: Date.now(), ts: Date.now()}}], "done"); closeModal(); toast("✔️ تنحات من القائمة"); }
 async function importSalahiti() {
   const f = await pickFile("application/json,.json"); if (!f) return;
   try {
