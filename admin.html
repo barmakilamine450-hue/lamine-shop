@@ -250,7 +250,13 @@ select.in{appearance:none;-webkit-appearance:none;background-image:linear-gradie
   body>*:not(#printArea){display:none!important}
   #printArea{display:block!important;width:72mm;margin:0 auto;padding:2mm 0 6mm}
   #printArea .bon{width:72mm!important;max-width:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin:0!important}
-  #printArea,#printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  /* طباعة خفيفة وسريعة على Xprinter: بلا خلفيات كحلة */
+  #printArea .band,#printArea th,#printArea .tot,#printArea .cli span:first-child{background:#fff!important;color:#000!important}
+  #printArea .band{border:2px solid #000}
+  #printArea th{border-width:1.5px}
+  #printArea .tot{border-radius:0}
+  #printArea .tot small{opacity:1}
+  #printArea .logo{width:56px}
 }
 .demo{background:#FFE9A8;color:#6B4A00;text-align:center;font-size:13px;padding:6px 10px;font-weight:700}
 
@@ -396,7 +402,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.1.2";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
