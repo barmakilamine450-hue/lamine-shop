@@ -384,7 +384,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.2";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -453,7 +453,22 @@ const Fire = {
     for (const o of ops) { const ref = this.db.collection(o.c).doc(o.id); if (o.t === "set") b.set(ref, o.d, o.merge ? {merge: true} : {}); else if (o.t === "update") b.update(ref, o.d); else b.delete(ref); }
     return b.commit();
   },
-  signIn() { const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"}); return this.auth.signInWithPopup(p).catch(e => { if (/popup|cancel/.test(e.code||"") && e.code !== "auth/popup-closed-by-user") return this.auth.signInWithRedirect(p); throw e; }); },
+  signIn() {
+    const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"});
+    // كي تكون الأنترنت ثقيلة (ولا صفحة Google تقطع الصلة مع النافذة)، Firebase يحسب النافذة «تسكّرت» قبل الوقت.
+    // نعطيوه 3 دقايق باش يستنى نتيجة الدخول.
+    const realOpen = window.open;
+    window.open = function (...a) {
+      window.open = realOpen;
+      const w = realOpen.apply(window, a); if (!w) return w;
+      const t0 = Date.now();
+      try { return new Proxy(w, {get(t, k) { if (k === "closed") return t.closed && Date.now() - t0 > 180000; const v = t[k]; return typeof v === "function" ? v.bind(t) : v; }}); }
+      catch (e) { return w; }
+    };
+    return this.auth.signInWithPopup(p)
+      .finally(() => { window.open = realOpen; })
+      .catch(e => { if (/popup-blocked|operation-not-supported/.test(e.code||"")) return this.auth.signInWithRedirect(p); throw e; });
+  },
   signInRedirect() { const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"}); return this.auth.signInWithRedirect(p); },
   signOut() { return this.auth.signOut(); },
   onUser(cb) { this.auth.onAuthStateChanged(u => cb(u)); }
@@ -623,16 +638,16 @@ function loginScreen(msg="") {
   $("#app").innerHTML = `<div class="login"><img src="${LOGO}" alt=""><h1>Lamine Pro</h1>
     <p>برنامج تسيير المحل: المخزون، الكاسة، الصلاحية، الديون، المشتريات والتقارير.</p>
     ${msg}
-    ${S.user ? `<button class="btn ghost" onclick="DB.signOut()">🔄 دخول بحساب آخر</button>` : `<button class="btn dark" onclick="doSignIn()">الدخول بـ Google</button>
-       <button class="btn ghost" style="margin-top:10px" onclick="doSignIn(true)">ما دخلش؟ جرّب الطريقة الثانية</button>`}
+    ${S.user ? `<button class="btn ghost" onclick="DB.signOut()">🔄 دخول بحساب آخر</button>` : `<button class="btn dark" onclick="doSignIn()">الدخول بـ Google</button>`}
     <p style="font-size:12.5px;margin-top:18px">النسخة ${APP_VERSION}</p></div>`;
 }
-async function doSignIn(redirect) {
-  try { await (redirect && DB.signInRedirect ? DB.signInRedirect() : DB.signIn()); }
+async function doSignIn() {
+  toast("⏳ اختار حسابك في النافذة الصغيرة واستنى، ما تسكّرهاش", 9000);
+  try { await DB.signIn(); }
   catch (e) {
     console.error(e);
-    if (e.code === "auth/popup-closed-by-user") toast("⚠️ النافذة تسكّرت قبل ما يكمل الدخول. اضغط «ما دخلش؟ جرّب الطريقة الثانية»", 7000);
-    else toast("❌ ما قدرتش ندخل: " + (e.code || e.message), 6000);
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") toast("⚠️ النافذة تسكّرت قبل ما يكمل الدخول. عاود اضغط «الدخول بـ Google»", 7000);
+    else toast("❌ ما قدرتش ندخل: " + (e.code || e.message), 7000);
   }
 }
 
