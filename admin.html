@@ -402,7 +402,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.1.2";
+const APP_VERSION = "1.1.3";
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
   phones: ["0665 81 36 29", "0674 08 23 48"], delivery: "🚚 التوصيل متوفر لـ 69 ولاية", ratlGrams: 500,
@@ -469,7 +469,7 @@ function printBon(html) {
     pa.style.cssText = "display:block;position:absolute;left:-9999px;top:0;width:72mm;padding:2mm 0 6mm";
     const mm = Math.ceil(pa.offsetHeight * 25.4 / 96) + 4; pa.style.cssText = "";
     let st = document.getElementById("printPage"); if (!st) { st = document.createElement("style"); st.id = "printPage"; document.head.appendChild(st); }
-    st.textContent = `@page{size:80mm ${Math.max(mm, 60)}mm;margin:0}`;
+    st.textContent = `@page{margin:0}`; // بلا مقاس خاص: الطابعة تستعمل الورق تاعها (الطابعات الحرارية ترفض أحياناً المقاسات الخاصة)
   };
   const done = () => { window.removeEventListener("afterprint", done); setTimeout(() => pa.remove(), 300); };
   window.addEventListener("afterprint", done);
@@ -1831,6 +1831,7 @@ VIEWS.settings = {
         <div class="it" onclick="ls('lp_lock',!lockOn());renderPage();toast(lockOn()?'🔐 الكود يتطلب كي يتحل البرنامج في هاد الجهاز':'الكود ما يتطلبش في هاد الجهاز')"><div class="th">🔒</div><div class="t"><b>اطلب الكود في هاد الجهاز</b><small>${lockOn() ? "✅ مشعولة" : "⛔ مطفية"}</small></div><span>←</span></div>` : ""}
         <div class="it" onclick="backup()"><div class="th">💾</div><div class="t"><b>نسخة احتياطية</b><small>حمّل كامل البيانات في ملف</small></div><span>←</span></div>` : ""}
         <div class="it" onclick="ls('lp_openpos',!ls('lp_openpos'));renderPage();toast(ls('lp_openpos')?'✅ الكاسة تتحل مباشرة في هاد الجهاز':'الرئيسية تتحل في الأول')"><div class="th">🖥️</div><div class="t"><b>فتح الكاسة مباشرة</b><small>في هاد الجهاز: كي تدخل تتحل الكاسة ديريكت</small></div><span class="pill ${ls("lp_openpos") ? "p-ok" : "p-mut"}">${ls("lp_openpos") ? "مشعول" : "مطفي"}</span></div>
+        <div class="it" onclick="printBon(ticketHTML({code:'000000',ts:Date.now(),byName:S.me.name,items:[{name:'تجربة الطباعة',unit:'piece',qty:1,price:0,total:0}],sub:0,disc:0,total:0,pay:'cash'}));toast('🖨️ راهو يطبع تيكي تجربة...')"><div class="th">🖨️</div><div class="t"><b>تجربة الطباعة</b><small>يطبع تيكي صغير باش تتأكد من الطابعة</small></div><span>←</span></div>
         <a class="it" href="./" style="text-decoration:none;color:inherit"><div class="th">🛍️</div><div class="t"><b>صفحة الزبائن</b><small>الموقع اللي يشوفو الزبائن</small></div><span>←</span></a>
       </div>
       <div class="card"><h3>👤 الحساب</h3><p style="margin:0 0 10px">${esc(S.me.name)} · <span class="pill ${own ? "p-ok" : "p-info"}">${own ? "👑 مول المحل" : "🧑‍🔧 خدام"}</span><br><small class="muted"><bdi>${esc(S.user.email || "")}</bdi></small></p>
