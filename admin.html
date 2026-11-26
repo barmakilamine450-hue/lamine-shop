@@ -408,6 +408,17 @@ html[data-theme="dark"] .pd-scan input::placeholder{color:rgba(255,255,255,.75)}
 .pd-tbl td.tg button{font-size:20px;padding:4px 6px;border-radius:10px;background:#FDE7E5}
 html[data-theme="dark"] .pa.x{background:#3B1F14!important}
 
+/* ===== 💰 الصندوق ===== */
+.cashc{margin-bottom:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.cashc .cc-h{display:flex;align-items:center;gap:12px}.cashc .cc-h b{display:block;font-size:17px}
+.cashc .cc-i{width:46px;height:46px;border-radius:14px;background:var(--warnbg);display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
+.cashc.done .cc-i{background:var(--okbg)}
+.cash-in{font-size:34px!important;font-weight:900;text-align:center;letter-spacing:1px}
+.cashrep{background:var(--soft);border-radius:16px;padding:6px 14px;margin:6px 0 12px}
+.cashrep>div{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:16px}
+.cashrep>div:last-child{border-bottom:0}
+.cashrep .exp{font-weight:900;font-size:18px}.cashrep .pf b{color:var(--ok);font-size:20px}.cashrep .df{font-size:19px}
+
 </style>
 </head>
 <body>
@@ -425,7 +436,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -820,6 +831,7 @@ function startData() {
   DB.watchDoc("settings", "shop", d => { applyShop(d || {}); schedule(); });
   DB.watchDoc("settings", "pro", d => { S.pro = d || {}; S.ready.pro = true; schedule(); setTimeout(dailyDigest, 3000); });
   DB.watchDoc("meta", "digest", d => { S.meta.digest = d || {}; });
+  if (typeof watchCash === "function") watchCash();
   if (isOwner()) {
     on("costs", "costs", null, byId);
     on("customers", "customers", null, rows => rows.sort((a, b) => (b.bal || 0) - (a.bal || 0)));
@@ -1048,6 +1060,7 @@ VIEWS.home = {
     const d = new Date();
     return `<div class="ptitle"><div><h1>${hello()}، ${esc(S.me.name.split(" ")[0])} 👋</h1><small class="muted">${d.toLocaleDateString("ar-DZ", {weekday: "long", day: "numeric", month: "long"})}</small></div></div>
     ${own && !S.pro.ntfy ? `<div class="alert info" onclick="go('settings');setTimeout(()=>openNotif(),60)"><i>🔔</i><div>فعّل الإشعارات باش يوصلك تنبيه كي تكمل سلعة ولا تقرب صلاحيتها<br><small>تاخذ دقيقتين</small></div><span class="go">←</span></div>` : ""}
+    ${typeof cashCard === "function" ? cashCard() : ""}
     <div class="kpis">
       ${own && S.lvl !== "admin" ? `<div class="kpi dark"><span class="ic">💰</span><small>مبيعات اليوم</small><b>${fmt(sum)}</b><small>${sales.length} بيعة</small></div>
       <div class="kpi or"><span class="ic">📈</span><small>ربح اليوم</small><b>${fmt(prof)}</b><small>بعد سعر الشراء</small></div>`
@@ -2320,6 +2333,167 @@ function delPin(id) {
     try { await commitFast([{t: "set", c: "settings", id: "pro", d: {pins: rest}, merge: true}]); } catch (e) { return toast("❌ " + (e.code || e.message)); }
     S.pro.pins = rest; PIN_LIST = rest; toast("تحذف"); openPins();
   }, "حذف");
+}
+
+/* ============================================================
+   💰 الصندوق: صرف الصباح، الخرجات، وغلق آخر النهار
+   يتسجّل في meta/cash_YYYY-MM-DD
+   ============================================================ */
+const cashKey = (d = todayISO()) => "cash_" + d;
+const CASH = () => S.meta[cashKey()] || null;
+let CASH_ASKED = false;
+function watchCash() {
+  const k = cashKey();
+  DB.watchDoc("meta", k, d => {
+    S.meta[k] = d || null;
+    if (S.tab === "home" && $("#page") && !$("#ov")) renderPage();
+    // أول مرة في النهار: يسقسي على صرف الصباح
+    if (!d && !CASH_ASKED && !sessionStorage.getItem("lp_cash_asked_" + k)) {
+      CASH_ASKED = true; sessionStorage.setItem("lp_cash_asked_" + k, "1");
+      setTimeout(() => { if (!CASH() && !$("#ov") && !$("#pdots")) openCash(true); }, 1200);
+    }
+  });
+}
+const canProfit = () => isOwner() && S.lvl !== "admin";
+function cashSync() {
+  const c = CASH() || {}, sales = S.salesToday || [];
+  const open = +((c.open || {}).amt) || 0;
+  const total = sales.reduce((a, s) => a + (s.total || 0), 0);
+  const cashSales = sales.reduce((a, s) => a + (s.pay === "debt" ? (+s.paid || 0) : (s.total || 0)), 0);
+  const credit = sales.reduce((a, s) => a + (s.pay === "debt" ? Math.max(0, (s.total || 0) - (+s.paid || 0)) : 0), 0);
+  const profit = sales.reduce((a, s) => a + (s.profit != null && !s.noCost ? s.profit : (s.total || 0) - (s.items || []).reduce((b, i) => b + (i.cost != null ? i.cost : costOf(i.pid)) * i.qty, 0)), 0);
+  const outs = (c.outs || []).reduce((a, o) => a + (+o.amt || 0), 0);
+  return {open, total, count: sales.length, cashSales, credit, profit, outs};
+}
+async function cashCalc() {
+  const x = cashSync();
+  let rep = 0;
+  if (isOwner()) {
+    const tx = await DB.list("debtTx", {where: [["ts", ">=", dayStart()]]}).catch(() => []);
+    rep = tx.filter(t => t.type === "pay" && !/^إلغاء/.test(t.note || "")).reduce((a, t) => a + (+t.amount || 0), 0);
+  }
+  x.rep = rep; x.expected = r2(x.open + x.cashSales + rep - x.outs);
+  return x;
+}
+// ===== كارت الصندوق في الرئيسية =====
+function cashCard() {
+  const c = CASH(), own = isOwner();
+  if (!c || !c.open) return `<div class="card cashc"><div class="cc-h"><span class="cc-i">💰</span><div><b>الصندوق</b><small class="muted">مازال ما حليتش الصندوق اليوم</small></div></div>
+    <button class="btn" onclick="openCash()">☀️ افتح الصندوق · صرف الصباح</button></div>`;
+  const x = cashSync();
+  if (c.close) return `<div class="card cashc done"><div class="cc-h"><span class="cc-i">✅</span><div><b>الصندوق مغلوق</b><small class="muted">لقيت ${fmt(c.close.counted)}${own ? ` · ${diffTxt(c.close.diff)}` : ""}</small></div></div>
+    <div class="grid2"><button class="btn ghost" onclick="cashReport()">📄 التقرير</button>${own ? `<button class="btn ghost" onclick="reopenCash()">🔓 عاود حلّو</button>` : ""}</div></div>`;
+  return `<div class="card cashc"><div class="cc-h"><span class="cc-i">💰</span><div><b>الصندوق محلول</b><small class="muted">صرف الصباح ${fmt(x.open)}${own ? ` · نقداً اليوم ${fmt(x.cashSales)}` : ""}${x.outs ? ` · خرجات ${fmt(x.outs)}` : ""}</small></div></div>
+    <div class="grid2"><button class="btn ghost" onclick="cashOut()">➖ خرّجت دراهم</button><button class="btn dark" onclick="closeCash()">🌙 غلق الصندوق</button></div></div>`;
+}
+const diffTxt = d => Math.abs(d) < 1 ? `<b style="color:var(--ok)">مضبوط ✔</b>` : d > 0 ? `<b style="color:var(--ok)">زايد ${fmt(d)}</b>` : `<b style="color:var(--bad)">ناقص ${fmt(-d)}</b>`;
+// ===== فتح الصندوق =====
+function openCash(auto) {
+  modal(`<h2>☀️ صرف الصباح<button class="x" onclick="closeModal()">×</button></h2>
+    <p class="muted" style="margin-top:0">${auto ? "صباح الخير 👋 " : ""}شحال حطّيت صرف في الصندوق باش تبدا النهار؟</p>
+    <input class="in cash-in" id="cs_o" inputmode="numeric" placeholder="0" onkeydown="if(event.key==='Enter')saveOpen()">
+    <div style="height:12px"></div><button class="btn" onclick="saveOpen()">✔️ افتح الصندوق</button>
+    ${auto ? `<div style="height:8px"></div><button class="btn ghost" onclick="closeModal()">من بعد</button>` : ""}`);
+  setTimeout(() => $("#cs_o") && $("#cs_o").focus(), 80);
+}
+async function saveOpen() {
+  const a = num($("#cs_o").value);
+  try { await commitFast([{t: "set", c: "meta", id: cashKey(), d: {day: todayISO(), open: {amt: a, ts: Date.now(), by: S.me.name}, outs: []}, merge: true}]); }
+  catch (e) { return toast("❌ ما تسجّلش: " + (e.code || e.message)); }
+  S.meta[cashKey()] = Object.assign({}, CASH() || {}, {day: todayISO(), open: {amt: a, ts: Date.now(), by: S.me.name}, outs: (CASH() || {}).outs || []});
+  closeModal(); toast(`☀️ الصندوق تحلّ · صرف الصباح ${fmtT(a)}`); if (S.tab === "home") renderPage();
+}
+// ===== خرجات من الصندوق =====
+function cashOut() {
+  const c = CASH() || {}, outs = c.outs || [];
+  modal(`<h2>➖ خرّجت دراهم من الصندوق<button class="x" onclick="closeModal()">×</button></h2>
+    <p class="muted" style="margin-top:0">مثلاً: خلّصت مورّد، شريت حاجة للمحل، ديت مصروف...</p>
+    <div class="row2"><div><label class="f">المبلغ</label><input class="in" id="co_a" inputmode="numeric" placeholder="0"></div><div><label class="f">علاش؟</label><input class="in" id="co_n" placeholder="مثلاً: خلّصت الكهرباء"></div></div>
+    <div style="height:12px"></div><button class="btn" onclick="saveOut()">✔️ سجّل</button>
+    ${outs.length ? `<h3 style="margin:16px 0 6px">اليوم</h3><div class="list">${outs.map(o => `<div class="it"><div class="th">➖</div><div class="t"><b>${fmt(o.amt)}</b><small>${esc(o.note || "")} · ${esc(o.by || "")} · ${new Date(o.ts).toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"})}</small></div></div>`).join("")}</div>` : ""}`);
+  setTimeout(() => $("#co_a") && $("#co_a").focus(), 80);
+}
+async function saveOut() {
+  const a = num($("#co_a").value); if (!(a > 0)) return toast("اكتب المبلغ");
+  const c = CASH() || {}, outs = [...(c.outs || []), {amt: a, note: $("#co_n").value.trim(), ts: Date.now(), by: S.me.name}];
+  try { await commitFast([{t: "set", c: "meta", id: cashKey(), d: {day: todayISO(), outs}, merge: true}]); }
+  catch (e) { return toast("❌ ما تسجّلش: " + (e.code || e.message)); }
+  S.meta[cashKey()] = Object.assign({}, c, {outs}); closeModal(); toast(`➖ تسجّلت: ${fmtT(a)}`); if (S.tab === "home") renderPage();
+}
+// ===== غلق الصندوق =====
+let CASH_X = null;
+async function closeCash() {
+  modal(`<h2>🌙 غلق الصندوق</h2><p class="muted">... نحسبو</p>`);
+  const x = CASH_X = await cashCalc(), own = isOwner();
+  modal(`<h2>🌙 غلق الصندوق<button class="x" onclick="closeModal()">×</button></h2>
+    ${own ? `<div class="cashrep">
+      <div><span>☀️ صرف الصباح</span><b>${fmt(x.open)}</b></div>
+      <div><span>💵 بيعات نقداً</span><b>+ ${fmt(x.cashSales)}</b></div>
+      ${x.rep ? `<div><span>💳 خلاص ديون</span><b>+ ${fmt(x.rep)}</b></div>` : ""}
+      ${x.outs ? `<div><span>➖ خرجات</span><b>− ${fmt(x.outs)}</b></div>` : ""}
+      <div class="exp"><span>المفروض يكون في الصندوق</span><b>${fmt(x.expected)}</b></div></div>` : ""}
+    <label class="f">شحال لقيت في الصندوق دروك؟</label>
+    <input class="in cash-in" id="cs_c" inputmode="numeric" placeholder="0" oninput="cashDiffLive()" onkeydown="if(event.key==='Enter')saveClose()">
+    <div id="cs_d" style="font-size:20px;font-weight:900;margin:10px 2px;min-height:28px"></div>
+    <button class="btn dark" onclick="saveClose()">🌙 غلق الصندوق</button>`);
+  setTimeout(() => $("#cs_c") && $("#cs_c").focus(), 80);
+}
+function cashDiffLive() { if (!isOwner() || !CASH_X) return; const v = $("#cs_c").value; $("#cs_d").innerHTML = v === "" ? "" : "الفرق: " + diffTxt(r2(num(v) - CASH_X.expected)); }
+async function saveClose() {
+  const x = CASH_X || await cashCalc(), counted = num($("#cs_c").value);
+  const close = {counted, expected: x.expected, diff: r2(counted - x.expected), ts: Date.now(), by: S.me.name,
+    total: x.total, count: x.count, cashSales: x.cashSales, credit: x.credit, rep: x.rep, outs: x.outs, open: x.open, ...(canProfit() ? {profit: r2(x.profit)} : {})};
+  if (!isOwner()) { close.expected = null; close.diff = null; }
+  try { await commitFast([{t: "set", c: "meta", id: cashKey(), d: {day: todayISO(), close}, merge: true}]); }
+  catch (e) { return toast("❌ ما تسجّلش: " + (e.code || e.message)); }
+  S.meta[cashKey()] = Object.assign({}, CASH() || {}, {close}); closeModal(); cashReport();
+}
+function reopenCash() { ask("تعاود تحل الصندوق؟ (الغلق تاع اليوم يتمسح)", async () => {
+  const c = Object.assign({}, CASH() || {}); delete c.close;
+  try { await DB.set("meta", cashKey(), c); } catch (e) { return toast("❌ " + (e.code || e.message)); }
+  S.meta[cashKey()] = c; if (S.tab === "home") renderPage(); }, "🔓 حلّو"); }
+// ===== تقرير النهار =====
+function cashReport() {
+  const c = CASH() || {}, k = c.close || {}, own = isOwner(), x = k.counted != null ? k : cashSync();
+  const L = (a, b, cls = "") => `<div class="${cls}"><span>${a}</span><b>${b}</b></div>`;
+  modal(`<h2>📄 تقرير النهار · ${new Date().toLocaleDateString("ar-DZ", {weekday: "long", day: "numeric", month: "long"})}<button class="x" onclick="closeModal()">×</button></h2>
+    <div class="cashrep">
+      ${own ? L("🧾 بعت (كامل البيعات)", `${fmt(x.total || 0)} · <bdi>${x.count || 0}</bdi> بيعة`) : ""}
+      ${own && canProfit() && x.profit != null ? L("📈 الفايدة تاع النهار", fmt(x.profit), "pf") : ""}
+      ${own && x.credit ? L("📒 بالكريدي", fmt(x.credit)) : ""}
+      ${L("☀️ صرف الصباح", fmt(x.open || 0))}
+      ${own ? L("💵 دخل نقداً", fmt((x.cashSales || 0) + (x.rep || 0))) : ""}
+      ${x.outs ? L("➖ خرجات", fmt(x.outs)) : ""}
+      ${own && k.expected != null ? L("المفروض في الصندوق", fmt(k.expected), "exp") : ""}
+      ${k.counted != null ? L("💰 لقيت في الصندوق", fmt(k.counted)) : ""}
+      ${own && k.diff != null ? `<div class="df"><span>الفرق</span>${diffTxt(k.diff)}</div>` : ""}
+    </div>
+    <div class="grid2"><button class="btn dark" onclick="printCashReport()">🖨️ اطبع التقرير</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
+}
+function printCashReport() {
+  const c = CASH() || {}, k = c.close || {}, own = isOwner(), x = k.counted != null ? k : cashSync(), d = new Date();
+  const n = v => Math.round(+v || 0).toLocaleString("fr-FR").replace(/ | /g, " ");
+  const R = (a, b) => `<div class="r"><span>${a}</span><b>${b}</b></div>`;
+  printDoc(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title> </title><style>
+@page{margin:0}*{box-sizing:border-box}html{font-size:calc(${pScale()} * 3.9vw)}
+body{margin:0;padding:.6rem 3vw 1.6rem;font-family:Tahoma,Arial,sans-serif;color:#000;font-weight:700}
+h1{text-align:center;font-size:1.4rem;margin:.2rem 0}.c{text-align:center;font-size:.95rem}
+.band{border:.16rem solid #000;text-align:center;font-weight:900;font-size:1.15rem;padding:.25rem;margin:.5rem 0}
+.r{display:flex;justify-content:space-between;font-size:1.05rem;padding:.2rem 0;border-bottom:.08rem dashed #000}.r b{font-weight:900}
+.big{border:.16rem solid #000;padding:.4rem .6rem;margin-top:.5rem;font-size:1.3rem}
+</style></head><body><h1>${esc(SHOP.name || "")}</h1>
+<div class="band">تقرير الصندوق · ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}</div>
+${own ? R("بعت (كامل)", n(x.total) + " DA") + R("عدد البيعات", x.count || 0) : ""}
+${own && canProfit() && x.profit != null ? R("الفايدة", n(x.profit) + " DA") : ""}
+${own && x.credit ? R("بالكريدي", n(x.credit) + " DA") : ""}
+${R("صرف الصباح", n(x.open) + " DA")}
+${own ? R("دخل نقداً", n((x.cashSales || 0) + (x.rep || 0)) + " DA") : ""}
+${x.outs ? R("خرجات", n(x.outs) + " DA") : ""}
+${own && k.expected != null ? R("المفروض في الصندوق", n(k.expected) + " DA") : ""}
+${k.counted != null ? `<div class="r big"><span>لقيت</span><b>${n(k.counted)} DA</b></div>` : ""}
+${own && k.diff != null ? `<div class="r big"><span>الفرق</span><b>${Math.abs(k.diff) < 1 ? "مضبوط" : (k.diff > 0 ? "زايد " : "ناقص ") + n(Math.abs(k.diff)) + " DA"}</b></div>` : ""}
+<div class="c" style="margin-top:.6rem">${esc(k.by || S.me.name)} · ${d.toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"})}</div>
+</body></html>`);
 }
 
 </script>
