@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#6B2E8F">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Samira">
 <title>Samira للطباعة والتصميم — متجر إلكتروني (نسخة تجريبية)</title>
 <meta name="description" content="توزيعات، دعوات، كتب تفاعلية، مطويات وتصميم غرافيكي — اطلبي تصميمك أونلاين، توصيل لـ 69 ولاية.">
 <meta property="og:type" content="website">
@@ -138,10 +143,18 @@ textarea.in{resize:vertical;min-height:70px}
 .sw.on{background:var(--ok)}.sw.on:after{right:24px}
 .foot{text-align:center;color:var(--mut);font-size:12.5px;padding:18px 20px 6px;line-height:1.7}
 .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:16px;font-weight:800;font-size:14.5px;z-index:99;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:90%;text-align:center;animation:fd .2s}
+.inst{display:none;position:sticky;top:var(--dh);z-index:39;margin:0 auto;width:min(560px,100%);background:#fff;border-bottom:1px solid #EEE3F5;padding:10px 14px;align-items:center;gap:12px;box-shadow:0 6px 18px rgba(74,29,102,.08)}
+.inst.on{display:flex}.inst img{width:44px;height:44px;border-radius:12px;flex:none}.inst div{flex:1;font-size:13.5px;line-height:1.45;color:var(--ink)}.inst div b{display:block;font-size:15px}
+.inst button.go{background:var(--p);color:#fff;border:0;border-radius:12px;padding:10px 16px;font:inherit;font-weight:800;font-size:15px;cursor:pointer;flex:none}.inst button.x{background:none;border:0;font-size:22px;color:var(--mut);cursor:pointer;padding:0 4px}
+.iosh{position:fixed;inset:0;z-index:80;background:rgba(42,22,56,.55);display:none;align-items:flex-end;justify-content:center}.iosh.on{display:flex}
+.iosh .c{background:#fff;width:min(560px,100%);border-radius:24px 24px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));font-size:16px;line-height:1.9}
+.iosh .c h3{margin:0 0 8px;font-size:19px}.iosh .c button{width:100%;margin-top:14px;background:var(--p);color:#fff;border:0;border-radius:14px;padding:13px;font:inherit;font-weight:800;font-size:16px}
 </style>
 </head>
 <body>
 <div class="demo">✨ نسخة تجريبية للمعاينة — باش تشوفي كيفاش يجي المتجر تاعك</div>
+<div class="inst" id="inst"><img src="icon-192.png" alt=""><div><b>نزّلي المتجر كتطبيق</b>يبان عندك على سطح المكتب ولا في الشاشة، ويتحل بضغطة وحدة</div><button class="go" onclick="doInstall()">📥 تثبيت</button><button class="x" onclick="instHide()">×</button></div>
+<div class="iosh" id="iosh" onclick="if(event.target===this)this.classList.remove('on')"><div class="c"><h3>📥 زيدي المتجر للشاشة</h3>1️⃣ اضغطي على زر المشاركة <b>⬆️</b> لتحت في Safari<br>2️⃣ اختاري <b>«إضافة إلى الشاشة الرئيسية»</b><br>3️⃣ اضغطي <b>«إضافة»</b> — يبان اللوقو تاع Samira في الشاشة<button onclick="this.closest('.iosh').classList.remove('on')">فهمت</button></div></div>
 <div id="app"></div>
 <div class="cartbar" id="cb"><button onclick="openCart()"><span class="n" id="cbn">0</span><span>طلبيتي</span><span class="go">كمّلي الطلب ←</span></button></div>
 <nav class="nav"><button id="nShop" class="on" onclick="go('shop')">🛍️ المتجر</button><button id="nAdm" onclick="go('admin')">👑 لوحة سميرة</button></nav>
@@ -277,6 +290,18 @@ function go(v){S.view=v;$("#nShop").classList.toggle("on",v==="shop");$("#nAdm")
 function render(keep){const y=window.scrollY;$("#app").innerHTML=S.view==="shop"?shop():admin();
   const cb=$("#cb");cb.classList.toggle("on",S.view==="shop"&&S.cart.length>0);$("#cbn").textContent=S.cart.length;if(keep)window.scrollTo(0,y)}
 render();
+</script>
+<script>
+// تثبيت المتجر كتطبيق (سطح المكتب / الهاتف)
+let INSTP=null;const STANDALONE=matchMedia("(display-mode: standalone)").matches||navigator.standalone;
+const IOS=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!/crios|fxios|edgios/i.test(navigator.userAgent);
+function instShow(){if(!STANDALONE&&!sessionStorage.getItem("instx"))document.getElementById("inst").classList.add("on")}
+function instHide(){document.getElementById("inst").classList.remove("on");try{sessionStorage.setItem("instx","1")}catch(e){}}
+addEventListener("beforeinstallprompt",e=>{e.preventDefault();INSTP=e;instShow()});
+addEventListener("appinstalled",()=>{INSTP=null;document.getElementById("inst").classList.remove("on")});
+async function doInstall(){if(INSTP){INSTP.prompt();const r=await INSTP.userChoice;INSTP=null;if(r.outcome==="accepted")document.getElementById("inst").classList.remove("on")}else if(IOS)document.getElementById("iosh").classList.add("on")}
+if(IOS&&!STANDALONE)instShow();
+if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
 </body>
 </html>
