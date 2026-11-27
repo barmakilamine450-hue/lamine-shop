@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Samira">
-<title>Samira للطباعة والتصميم — متجر إلكتروني (نسخة تجريبية)</title>
+<title>Samira للطباعة والتصميم — اطلبي تصميمك أونلاين</title>
 <meta name="description" content="توزيعات، دعوات، كتب تفاعلية، مطويات وتصميم غرافيكي — اطلبي تصميمك أونلاين، توصيل لـ 69 ولاية.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Samira للطباعة والتصميم — اطلبي تصميمك أونلاين">
@@ -149,6 +149,12 @@ textarea.in{resize:vertical;min-height:70px}
 .iosh{position:fixed;inset:0;z-index:80;background:rgba(42,22,56,.55);display:none;align-items:flex-end;justify-content:center}.iosh.on{display:flex}
 .iosh .c{background:#fff;width:min(560px,100%);border-radius:24px 24px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));font-size:16px;line-height:1.9}
 .iosh .c h3{margin:0 0 8px;font-size:19px}.iosh .c button{width:100%;margin-top:14px;background:var(--p);color:#fff;border:0;border-radius:14px;padding:13px;font:inherit;font-weight:800;font-size:16px}
+body.live .demo{display:none}body.live .inst{top:0}body.live .stamp{display:none}
+body.live:not(.me) .nav{display:none}body.live:not(.me) .cartbar{bottom:16px}
+.ownerlink{text-align:center;padding:4px 0 110px}.ownerlink button{background:none;border:0;color:var(--mut);font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer;opacity:.75}
+.gate p{line-height:1.8;margin:4px 2px 14px}.gg{display:inline-flex;width:28px;height:28px;border-radius:50%;background:#fff;color:#4285F4;font-weight:900;align-items:center;justify-content:center;margin-left:6px}
+.warnb{background:#FFF4DC;color:#6B4A08;font-size:14.5px;line-height:1.7}
+.bdg{display:inline-block;min-width:22px;height:22px;line-height:22px;border-radius:11px;background:#E0443A;color:#fff;font-size:12px;font-weight:900;padding:0 6px;margin-right:4px}
 </style>
 </head>
 <body>
@@ -290,6 +296,192 @@ function go(v){S.view=v;$("#nShop").classList.toggle("on",v==="shop");$("#nAdm")
 function render(keep){const y=window.scrollY;$("#app").innerHTML=S.view==="shop"?shop():admin();
   const cb=$("#cb");cb.classList.toggle("on",S.view==="shop"&&S.cart.length>0);$("#cbn").textContent=S.cart.length;if(keep)window.scrollTo(0,y)}
 render();
+</script>
+<script>
+/* ================= النسخة الحقيقية (Firebase) =================
+   - الإعدادات (الواتساب، المكان، الأسعار، المتوفر) في stores/samira، يشوفها كل زبون
+   - الطلبيات في stores/samira/orders، تشوفها غير صاحبة المتجر
+   - صاحبة المتجر تفعّل المتجر مرة وحدة بحساب Google + كود التفعيل */
+const STORE_ID = "samira";
+const FB_CFG = {apiKey: "AIzaSyCZ-GsBgjSe1eW_HWeTcVl8NtCs1-WEtZk", authDomain: "lamine-shop-c9e67.firebaseapp.com", projectId: "lamine-shop-c9e67",
+  storageBucket: "lamine-shop-c9e67.firebasestorage.app", messagingSenderId: "611800505961", appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"};
+const L = {cfg: null, user: null, orders: [], fb: false, ready: false, unO: null, newSeen: null, busy: false};
+const lsG = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+const lsS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const DEF_PLACE = SHOP.place;
+const newNo = () => Number(String(Date.now()).slice(-5));
+const isLive = () => !!(L.cfg && L.cfg.owner);
+const isMe = () => !!(L.user && L.cfg && L.cfg.owner === L.user.uid);
+const storeRef = () => L.db.collection("stores").doc(STORE_ID);
+
+function applyCfg(c) {
+  L.cfg = c;
+  if (!c) return;
+  SHOP.wa = c.wa || ""; SHOP.place = c.place || DEF_PLACE;
+  S.price = {...(c.price || {})};
+  S.avail = Object.fromEntries(P.map(p => [p.id, !(c.avail && c.avail[p.id] === false)]));
+  if (c.owner && S.orders.length && !S.orders[0].id) { S.orders = []; S.seq = newNo(); }
+  if (c.owner) document.title = "Samira للطباعة والتصميم";
+}
+function flags() {
+  document.body.classList.toggle("live", isLive());
+  document.body.classList.toggle("me", isMe() || S.view === "admin");
+}
+// ما نعاودوش نرسمو الصفحة وهي تكتب في خانة
+let PEND = false;
+function safeRender() {
+  const a = document.activeElement;
+  if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && $("#app").contains(a)) { PEND = true; return; }
+  render(true);
+}
+document.addEventListener("focusout", () => setTimeout(() => { if (PEND) { PEND = false; safeRender(); } }, 50));
+
+/* ---------- Firebase ---------- */
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function fbInit() {
+  try {
+    if (window.MOCKFB) window.firebase = window.MOCKFB;
+    else { const b = "https://www.gstatic.com/firebasejs/10.12.2/"; for (const f of ["firebase-app-compat.js", "firebase-auth-compat.js", "firebase-firestore-compat.js"]) await loadScript(b + f); }
+    firebase.initializeApp(FB_CFG);
+    L.db = firebase.firestore();
+    try { await L.db.enablePersistence({synchronizeTabs: true}); } catch (e) {}
+    L.auth = firebase.auth();
+    L.auth.getRedirectResult().catch(e => { if (e && e.code && e.code !== "auth/no-auth-event") toast("❌ ما قدرتش ندخل: " + e.code, 5000); });
+    L.fb = true;
+    storeRef().onSnapshot(d => {
+      const c = d.exists ? d.data() : null; lsS("sm_cfg", c); applyCfg(c); L.ready = true; watchOrders(); flags(); safeRender();
+    }, e => { console.warn("store", e); L.ready = true; safeRender(); });
+    L.auth.onAuthStateChanged(u => { L.user = u; watchOrders(); flags(); safeRender(); });
+  } catch (e) { console.warn("fb", e); L.ready = true; safeRender(); }
+}
+function watchOrders() {
+  if (isMe() && !L.unO) {
+    L.unO = storeRef().collection("orders").orderBy("ts", "desc").limit(200).onSnapshot(s => {
+      L.orders = s.docs.map(d => ({id: d.id, ...d.data()}));
+      const nw = L.orders.filter(x => x.st === 0).length;
+      if (L.newSeen != null && nw > L.newSeen) { toast("🆕 وصلت طلبية جديدة!", 4000); beep(); try { navigator.vibrate && navigator.vibrate([120, 80, 120]); } catch (e) {} }
+      L.newSeen = nw; badge(); safeRender();
+    }, e => console.warn("orders", e));
+  } else if (!isMe() && L.unO) { L.unO(); L.unO = null; L.orders = []; L.newSeen = null; badge(); }
+}
+function beep() { try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(.18, a.currentTime); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + .5); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + .5); } catch (e) {} }
+function badge() { const b = $("#nAdm"); if (!b) return; const n = L.orders.filter(x => x.st === 0).length; b.innerHTML = `👑 لوحة سميرة${n ? ` <span class="bdg">${n}</span>` : ""}`; }
+function signIn() {
+  if (!L.fb) return toast("📶 لازم الأنترنت");
+  const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"});
+  const realOpen = window.open;
+  window.open = function (...a) {
+    window.open = realOpen; const w = realOpen.apply(window, a); if (!w) return w; const t0 = Date.now();
+    try { return new Proxy(w, {get(t, k) { if (k === "closed") return t.closed && Date.now() - t0 > 180000; const v = t[k]; return typeof v === "function" ? v.bind(t) : v; }}); } catch (e) { return w; }
+  };
+  return L.auth.signInWithPopup(p).finally(() => { window.open = realOpen; })
+    .catch(e => { if (/popup-blocked|operation-not-supported/.test(e.code || "")) return L.auth.signInWithRedirect(p); if (!/cancelled|closed/.test(e.code || "")) toast("❌ " + (e.code || e.message), 5000); });
+}
+function signOutS() { L.auth && L.auth.signOut(); go("shop"); }
+
+/* ---------- الطلبية ---------- */
+async function saveOrder(o) {
+  if (!L.fb || !isLive()) return false;
+  const d = {no: o.no, name: o.name, tel: o.tel, wil: o.wil, place: o.place, how: o.how, st: 0, ts: Date.now(), time: o.time,
+    items: o.items.map(it => ({pid: it.pid, qty: it.qty, det: it.det || "", t: byId(it.pid).t}))};
+  try { await Promise.race([storeRef().collection("orders").add(d), new Promise((_, j) => setTimeout(() => j(new Error("timeout")), 9000))]); return true; }
+  catch (e) { console.warn("order", e); return e.message === "timeout" ? "late" : false; }
+}
+const _setPriceDemo = window.setPrice, _confirmDemo = window.confirmO, _sendWADemo = window.sendWA, _waDirectDemo = window.waDirect, _adminDemo = window.admin, _renderBase = window.render, _goBase = window.go;
+window.confirmO = async function (silent) {
+  if (!isLive()) return _confirmDemo(silent);
+  const o = S.pending; if (!o || L.busy) return; L.busy = true;
+  document.querySelectorAll("#ov .btn").forEach(b => b.disabled = true);
+  const ok = await saveOrder(o); L.busy = false;
+  window.LASTO = o; S.cart = []; S.pending = null; S.seq = newNo(); render(true);
+  sheet(`<div class="okhead"><div class="ic">✓</div><b>وصلت الطلبية! شكرا ${esc(o.name)} 💜</b><span class="muted">سميرة تتصل بيك باش تأكد التفاصيل والسعر</span></div>${bon(o)}
+    ${ok === true ? "" : ok === "late" ? `<div class="note">📶 الأنترنت ثقيلة: الطلبية تتبعث وحدها كي تولّي مليحة. باش تكوني متأكدة ابعثيها حتى في الواتساب.</div>` : `<div class="note">⚠️ ما قدرناش نبعثو الطلبية. ابعثيها في الواتساب من فضلك.</div>`}
+    ${SHOP.wa && (!silent || ok !== true) ? `<button class="btn wa" onclick="window.open('https://wa.me/${waNum(SHOP.wa)}?text='+encodeURIComponent(msg(LASTO)),'_blank')">💬 ابعثيها في الواتساب</button><div style="height:8px"></div>` : ""}
+    <button class="btn gh" onclick="closeSheet()">رجوع للمتجر</button>`);
+};
+window.sendWA = function () {
+  if (!isLive()) return _sendWADemo();
+  if (!SHOP.wa) { toast("📲 الواتساب مازال ما تحطّش — أكّدي الطلب برك ✅", 3500); return; }
+  window.LASTO = S.pending; window.open(`https://wa.me/${waNum(SHOP.wa)}?text=${encodeURIComponent(msg(S.pending))}`, "_blank"); confirmO(true);
+};
+window.waDirect = function () {
+  if (!isLive()) return _waDirectDemo();
+  if (!SHOP.wa) return toast("📲 الواتساب قريب يتحط");
+  window.open(`https://wa.me/${waNum(SHOP.wa)}`, "_blank");
+};
+
+/* ---------- لوحة سميرة ---------- */
+function gate(inner) { return `<header class="ahero"><h1>👑 لوحة سميرة</h1><p>دخول صاحبة المتجر</p></header><div class="box gate">${inner}</div>`; }
+window.admin = function () {
+  if (!L.fb) return gate(`<p>${L.ready ? "📶 لازم الأنترنت باش تدخلي للوحة." : "⏳ لحظة..."}</p>`);
+  if (!L.user) return gate(`<p>هنا تشوفي الطلبيات، تحطي رقم الواتساب والأسعار، وتبدّلي في المتجر وحدك.</p>
+    <button class="btn" onclick="signIn()"><span class="gg">G</span> الدخول بحساب Google</button><p class="muted" style="font-size:13px;margin:10px 2px 0">ادخلي ديما بنفس الحساب، في التيليفون ولا في الميكرو.</p>`);
+  if (!L.ready) return gate(`<p>⏳ لحظة...</p>`);
+  if (!isLive()) return gate(`<p>مرحبا ${esc(L.user.displayName || "")} 👋<br><b>أول مرة؟</b> اكتبي <b>كود التفعيل</b> اللي عطاهولك لمين، باش يولّي المتجر تاعك.</p>
+    <input class="in" id="acode" dir="ltr" placeholder="SAM-XXXXXX" style="text-align:center;font-size:20px;letter-spacing:2px;text-transform:uppercase" onkeydown="if(event.key==='Enter')activate()">
+    <div style="height:12px"></div><button class="btn" onclick="activate()">✅ فعّلي المتجر</button><div style="height:8px"></div><button class="btn gh" onclick="signOutS()">خروج</button>`);
+  if (!isMe()) return gate(`<p>⚠️ الحساب <b dir="ltr">${esc(L.user.email || "")}</b> ماشي هو حساب صاحبة المتجر.</p><button class="btn gh" onclick="signOutS()">خروج وادخلي بالحساب الصحيح</button>`);
+  const o = L.orders, c = L.cfg;
+  return `<header class="ahero"><h1>👑 لوحة سميرة</h1><p>مرحبا ${esc(L.user.displayName || "سميرة")} 💜 كلش يتبدّل من هنا</p>
+    <div class="stats"><div class="stat"><b>${o.length}</b><span>طلبيات</span></div><div class="stat"><b>${o.filter(x => x.st === 0).length}</b><span>جديدة</span></div><div class="stat"><b>${o.filter(x => x.st < 3).length}</b><span>مازال ما كملوش</span></div></div></header>
+   ${c.wa ? "" : `<div class="box warnb">📲 <b>حطي رقم الواتساب</b> لتحت في «معلومات المتجر» باش توصلك الطلبيات.</div>`}
+   <div class="box"><h3>📦 الطلبيات <small>اضغطي على الحالة باش تبدّليها</small></h3>
+    ${o.length ? o.map(x => `<div class="ord ${x.st === 0 ? "new" : ""}"><div class="t"><span>#SM-${esc(x.no)} · ${esc(x.name)}</span><small>${new Date(x.ts).toLocaleDateString("fr-FR")} ${esc(x.time || "")}</small></div>
+      <div class="d">${(x.items || []).map(it => `${esc(it.t || (byId(it.pid) || {}).t || "")} × ${esc(it.qty)}${it.det ? ` <br><small>${esc(it.det)}</small>` : ""}`).join("<br>")}<br>📍 ${esc(WILAYAS[(x.wil || 1) - 1])} · ${esc(x.place)} · ${x.how === "del" ? "🚚 توصيل" : "🏪 تجي تديها"}</div>
+      <div class="ft"><a class="btn sm gh" style="width:auto;flex:none" href="tel:${esc(String(x.tel).replace(/\s/g, ""))}">📞</a><a class="btn sm gh" style="width:auto;flex:none" target="_blank" href="https://wa.me/${waNum(x.tel)}">💬</a><button class="btn sm gh" style="width:auto;flex:none" onclick="delOrder('${x.id}')">🗑️</button><button class="st s${x.st}" onclick="stOrder('${x.id}',${x.st})">${ST[x.st] || ST[0]}</button></div></div>`).join("")
+      : `<p class="muted" style="text-align:center;margin:18px 0">مازال ما كاين حتى طلبية. كي توصل تبان هنا 🔔</p>`}</div>
+   <div class="box"><h3>⚙️ معلومات المتجر</h3>
+    <label class="f">رقم الواتساب اللي توصلك فيه الطلبيات</label><input class="in" id="s_wa" dir="ltr" inputmode="tel" placeholder="06xx xx xx xx" value="${esc(c.wa || "")}">
+    <label class="f">المكان (يبان للزبائن)</label><input class="in" id="s_place" value="${esc(c.place || DEF_PLACE)}">
+    <label class="f">التوصيل</label><div class="seg" id="s_del"><button class="${c.deliv !== "local" ? "on" : ""}" onclick="S.del='all';this.classList.add('on');this.nextElementSibling.classList.remove('on')">🚚 لـ 69 ولاية</button><button class="${c.deliv === "local" ? "on" : ""}" onclick="S.del='local';this.classList.add('on');this.previousElementSibling.classList.remove('on')">🏘️ غير محلي</button></div>
+    <div style="height:12px"></div><button class="btn" onclick="saveInfo()">💾 حفظ المعلومات</button></div>
+   <div class="box"><h3>🛍️ الخدمات والأسعار <small>تتسجّل وحدها</small></h3>
+    ${P.map(p => `<div class="pr">${pic(p)}<div class="nm">${p.t}</div><input inputmode="numeric" placeholder="السعر" value="${S.price[p.id] || ""}" onchange="setPrice(${p.id},this.value)" aria-label="السعر"><button class="sw ${S.avail[p.id] ? "on" : ""}" aria-label="متوفر" onclick="setAvail(${p.id})"></button></div>`).join("")}
+    <p class="muted" style="font-size:12.5px;margin:8px 2px">السعر فارغ = «السعر حسب الطلب». الزر = متوفرة / مؤقتاً غير متوفرة.</p></div>
+   <div class="box"><button class="btn gh" onclick="signOutS()">🚪 خروج من الحساب</button><p class="muted" style="font-size:12.5px;margin:10px 2px 0;text-align:center">${esc(L.user.email || "")}</p></div>`;
+};
+async function activate() {
+  const code = ($("#acode").value || "").trim().toUpperCase(); if (!code) return toast("✍️ اكتبي الكود");
+  try {
+    await storeRef().set({owner: L.user.uid, code, ownerName: L.user.displayName || "", ownerEmail: L.user.email || "", wa: "", place: DEF_PLACE, deliv: "all", price: {}, avail: {}, created: Date.now()});
+    toast("🎉 تفعّل المتجر! دروك حطي رقم الواتساب", 4000);
+  } catch (e) { console.warn(e); toast("❌ الكود ماشي صحيح", 3500); }
+}
+async function upd(d, ok) { try { await storeRef().update(d); if (ok) toast(ok); } catch (e) { toast("❌ ما تسجّلش: " + (e.code || e.message), 4000); } }
+function saveInfo() {
+  const wa = $("#s_wa").value.trim(), place = $("#s_place").value.trim();
+  if (wa && !/^0[5-7]\d{8}$/.test(wa.replace(/\s/g, "")) && !/^\+?213\d{9}$/.test(wa.replace(/\s/g, ""))) return toast("📞 رقم الواتساب ماشي صحيح");
+  const deliv = S.del || (L.cfg.deliv || "all");
+  $("#app").focus(); document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  upd({wa, place: place || DEF_PLACE, deliv}, "✅ تسجّلت المعلومات");
+}
+window.setPrice = function (id, v) {
+  if (!isLive()) return _setPriceDemo(id, v);
+  if (!isMe()) return;
+  const n = parseInt(String(v).replace(/\D/g, ""), 10), pr = {...(L.cfg.price || {})};
+  if (n) pr[id] = n; else delete pr[id];
+  upd({price: pr}, "✅ السعر تبدّل في المتجر");
+};
+function setAvail(id) { const av = {...(L.cfg.avail || {})}; av[id] = !S.avail[id]; upd({avail: av}, av[id] ? "✅ ولّات متوفرة" : "⏸️ مؤقتاً غير متوفرة"); }
+function stOrder(id, st) { storeRef().collection("orders").doc(id).update({st: (st + 1) % 4}).catch(e => toast("❌ " + (e.code || e.message))); }
+function delOrder(id) { if (confirm("تحذفي هاد الطلبية؟")) storeRef().collection("orders").doc(id).delete().catch(e => toast("❌ " + (e.code || e.message))); }
+
+/* ---------- العرض ---------- */
+window.render = function (keep) {
+  _renderBase(keep); flags();
+  if (S.view === "shop") {
+    if (L.cfg && L.cfg.deliv === "local") document.querySelectorAll(".chips span").forEach(s => { if (/69/.test(s.textContent)) s.textContent = "🚚 توصيل محلي"; });
+    $("#app").insertAdjacentHTML("beforeend", `<div class="ownerlink"><button onclick="go('admin')">🔐 دخول صاحبة المتجر</button></div>`);
+  }
+  badge();
+};
+window.go = function (v) { S.view = v; flags(); _goBase(v); };
+
+// البداية: من الذاكرة أولاً (سريع وبلا أنترنت) ومن بعد Firebase
+applyCfg(lsG("sm_cfg")); if (isLive()) { S.orders = []; S.seq = newNo(); }
+if (/admin/.test(location.hash)) S.view = "admin";
+go(S.view);
+fbInit();
 </script>
 <script>
 // تثبيت المتجر كتطبيق (سطح المكتب / الهاتف)
