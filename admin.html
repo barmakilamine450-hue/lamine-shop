@@ -461,6 +461,14 @@ html[data-theme="dark"] .rvbar{background:#3A2616;color:#F2E8DF}
 #bcpick .th .vsw{width:28px;height:28px}
 .vrow .vname{flex:1}.vrow .vbc{flex:1.8;font-size:14.5px;padding-left:8px;padding-right:8px;letter-spacing:.3px}
 
+/* اللون من الصورة */
+.cpov{position:fixed;inset:0;z-index:200;background:rgba(20,12,8,.6);display:flex;align-items:flex-end;justify-content:center}
+.cpbox{background:var(--card);color:var(--ink);width:min(560px,100%);max-height:96vh;overflow:auto;border-radius:24px 24px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.cpbox h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px;font-size:18px}
+.cpwrap{position:relative;border-radius:16px;overflow:hidden;line-height:0}.cpwrap canvas{width:100%;height:auto;max-height:52vh;object-fit:contain;cursor:crosshair}
+.cpdot{position:absolute;width:34px;height:34px;border-radius:50%;border:4px solid #fff;box-shadow:0 0 0 2px #000,0 4px 12px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none}
+.cpres{display:flex;gap:10px;align-items:center}.cpres i{width:48px;height:48px;border-radius:14px;border:2px solid var(--line);flex:none}.cpres .in{font-size:20px;font-weight:900}
+
 </style>
 </head>
 <body>
@@ -478,7 +486,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.8.1";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1560,7 +1568,8 @@ function editProduct(id, preset={}) {
     <div id="e_expc" class="chips" style="margin-top:6px;flex-wrap:wrap"></div>
     <div class="vbox"><div class="vhd"><b>🎨 الألوان / الأنواع · باركودات أخرى</b><small class="muted">مثلاً عجينة سكر: كل لون باسمو وبالباركود تاعو. كي تسكانّي الباركود يطلع اللون ديريكت.</small></div>
       <div id="e_vars"></div>
-      <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" onclick="addVRow(true)">🎨 زيد لون</button><button class="btn ghost sm" onclick="addVRow(false)">🔢 زيد باركود آخر</button></div></div>
+      <button class="btn sm" style="margin-top:10px" onclick="colorFromPhoto(-1)">📸 صوّر السلعة واللون يتكتب وحدو</button>
+      <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" onclick="addVRow(true)">🎨 زيد لون بيدي</button><button class="btn ghost sm" onclick="addVRow(false)">🔢 زيد باركود آخر</button></div></div>
     <label class="f">وصف قصير (يبان للزبائن)</label><textarea class="in" id="e_desc" rows="2">${esc(EP.desc)}</textarea>
     <div class="seg" style="margin-top:12px"><button id="e_stock" class="${EP.stock !== false ? "on" : ""}" onclick="EP.stock=!(EP.stock!==false);EP.autoOut=false;this.classList.toggle('on');this.textContent=EP.stock!==false?'✅ متوفرة':'⛔ نفدت'">${EP.stock !== false ? "✅ متوفرة" : "⛔ نفدت"}</button>
       <button class="${EP.active !== false ? "on" : ""}" onclick="EP.active=!(EP.active!==false);this.classList.toggle('on');this.textContent=EP.active!==false?'👁️ ظاهرة للزبائن':'🙈 مخفية'">${EP.active !== false ? "👁️ ظاهرة للزبائن" : "🙈 مخفية"}</button></div>
@@ -1583,7 +1592,7 @@ function drawVRows() {
   b.innerHTML = R.length ? R.map((r, i) => `<div class="vrow ${r.isVar === false || (!r.name && r.isVar !== true) ? "nov" : ""}">
       ${r.isVar === false || (!r.name && r.isVar !== true) ? `<span class="vlab">🔢 نفس السلعة</span>` : `<input type="color" class="vcol" value="${esc(r.hex || "#cccccc")}" onchange="EP.vrows[${i}].hex=this.value"><input class="in vname" placeholder="اللون (مثلاً: أحمر)" value="${esc(r.name)}" oninput="EP.vrows[${i}].name=this.value">`}
       <input class="in vbc" dir="ltr" inputmode="numeric" placeholder="الباركود" value="${esc(r.bc)}" oninput="EP.vrows[${i}].bc=this.value.trim()">
-      <button class="mini" onclick="scanBarcode(c=>{EP.vrows[${i}].bc=c;drawVRows()})">📷</button><button class="mini red" onclick="EP.vrows.splice(${i},1);drawVRows()">×</button></div>`).join("")
+      <button class="mini" title="سكانّي الباركود" onclick="scanBarcode(c=>{EP.vrows[${i}].bc=c;drawVRows()})">🔢</button>${r.isVar === false || (!r.name && r.isVar !== true) ? "" : `<button class="mini" title="صوّر اللون" onclick="colorFromPhoto(${i})">📸</button>`}<button class="mini red" onclick="EP.vrows.splice(${i},1);drawVRows()">×</button></div>`).join("")
     : `<p class="muted" style="font-size:13px;margin:6px 2px">ما كاين حتى لون. إذا السلعة كاين منها بزاف ألوان، اضغط «🎨 زيد لون».</p>`;
 }
 function addVRow(isVar) { (EP.vrows = EP.vrows || []).push({vid: "", name: "", hex: isVar ? VHEX[EP.vrows.filter(r => r.name || r.isVar).length % VHEX.length] : "", bc: "", isVar}); drawVRows(); const L = $$("#e_vars .vrow"); const r = L[L.length - 1]; r && (r.querySelector(isVar ? ".vname" : ".vbc") || {}).focus && r.querySelector(isVar ? ".vname" : ".vbc").focus(); }
@@ -1592,6 +1601,67 @@ function collectVars() {
   for (const r of R) { if (!r.name) continue; let x = variants.find(z => z.name === r.name); if (!x) { x = {id: r.vid || "v" + Math.random().toString(36).slice(2, 9), name: r.name, hex: r.hex || ""}; variants.push(x); } r.vid = x.id; }
   for (const r of R) if (r.bc && !bcs.some(b => b.bc === r.bc)) bcs.push({bc: r.bc, v: r.name ? r.vid : ""});
   return {variants, bcs};
+}
+/* 📸 اللون من الصورة: البرنامج يشوف اللون ويعطيه اسم (بلا أنترنت) */
+const CNAMES = [["أبيض","#FFFFFF"],["أبيض كريمي","#FFF8E7"],["كريمي","#F3E5C3"],["بيج","#D9C3A0"],["أسود","#141414"],["رمادي فاتح","#C8C8C8"],["رمادي","#8C8C8C"],["رمادي غامق","#4A4A4A"],
+  ["أحمر","#D32F2F"],["أحمر فاتح","#F0504A"],["عنابي","#7B1E2B"],["مرجاني","#FF7F6E"],["وردي فاتح","#F8BBD0"],["وردي","#F48FB1"],["وردي غامق","#E25B8E"],["فوشيا","#D81B60"],["سلموني","#F6A38A"],
+  ["برتقالي","#F57C00"],["برتقالي فاتح","#FFA94D"],["مشمشي","#FBC38D"],["أصفر","#FBD827"],["أصفر فاتح","#FFF29A"],["أصفر ليموني","#E5E85A"],["ذهبي","#D4A62A"],["خردلي","#C9A227"],
+  ["بني فاتح","#B07A4F"],["كراميل","#C68642"],["بني","#7B4A2A"],["بني غامق (شوكولا)","#4A2C1D"],
+  ["أخضر فاتح","#9CDB7A"],["أخضر نعناعي","#A8E6CF"],["أخضر","#3FA34D"],["أخضر غامق","#1F5F2E"],["زيتي","#7A7F3A"],["أخضر تفاحي","#8BC34A"],
+  ["تركواز","#21B6B0"],["أزرق سماوي","#8FD3F4"],["أزرق فاتح","#6FA8DC"],["أزرق","#1E6FD9"],["أزرق ملكي","#2A3FB8"],["كحلي","#1B2A4A"],
+  ["بنفسجي","#7B3FA0"],["ليلكي","#C8A2D9"],["موف","#9B6FB0"],["بنفسجي غامق","#4A2063"]];
+function rgb2lab(r, g, b) {
+  [r, g, b] = [r, g, b].map(v => { v /= 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; });
+  let x = (r * .4124 + g * .3576 + b * .1805) / .95047, y = r * .2126 + g * .7152 + b * .0722, z = (r * .0193 + g * .1192 + b * .9505) / 1.08883;
+  const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116; x = f(x); y = f(y); z = f(z);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+const CLAB = CNAMES.map(([n, h]) => [n, h, rgb2lab(parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16))]);
+function colorName(r, g, b) { const L = rgb2lab(r, g, b); let best = null, bd = 1e9; for (const c of CLAB) { const d = (L[0] - c[2][0]) ** 2 * .6 + (L[1] - c[2][1]) ** 2 + (L[2] - c[2][2]) ** 2; if (d < bd) { bd = d; best = c; } } return best[0]; }
+const toHex = (r, g, b) => "#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
+// اللون الغالب في وسط الصورة (نحّيو الضو القوي والظل)
+function dominantColor(ctx, W, H) {
+  const x0 = Math.round(W * .25), y0 = Math.round(H * .25), w = Math.round(W * .5), h = Math.round(H * .5), d = ctx.getImageData(x0, y0, w, h).data, B = {};
+  let nb = 0, nd = 0, nt = 0;
+  for (let i = 0; i < d.length; i += 16) { const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); nt++;
+    if (mx > 240 && mn > 228) { nb++; continue; } if (mx < 22) { nd++; continue; }
+    const k = (r >> 4) + "," + (g >> 4) + "," + (b >> 4); const o = B[k] || (B[k] = [0, 0, 0, 0]); o[0] += r; o[1] += g; o[2] += b; o[3]++; }
+  if (nb > nt * .3) return [250, 250, 248]; if (nd > nt * .3) return [16, 16, 16];
+  let best = null; for (const k in B) if (!best || B[k][3] > best[3]) best = B[k];
+  if (!best) { const c = ctx.getImageData(Math.round(W / 2), Math.round(H / 2), 1, 1).data; return [c[0], c[1], c[2]]; }
+  return [best[0] / best[3], best[1] / best[3], best[2] / best[3]];
+}
+function spotColor(ctx, x, y) { const R = 6, d = ctx.getImageData(Math.max(0, x - R), Math.max(0, y - R), R * 2, R * 2).data; let r = 0, g = 0, b = 0, n = 0; for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; } return [r / n, g / n, b / n]; }
+let CP = null;
+function colorFromPhoto(idx) {
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
+  inp.onchange = () => { const f = inp.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = () => { const im = new Image(); im.onload = () => openCP(im, idx); im.src = fr.result; }; fr.readAsDataURL(f); };
+  inp.click();
+}
+function openCP(im, idx) {
+  const s = Math.min(1, 700 / Math.max(im.width, im.height)), W = Math.round(im.width * s), H = Math.round(im.height * s);
+  const o = document.createElement("div"); o.className = "cpov"; o.id = "cpov";
+  o.innerHTML = `<div class="cpbox"><h3>🎨 اللون من الصورة<button class="x" onclick="closeCP()">×</button></h3>
+    <div class="cpwrap"><canvas id="cpc" width="${W}" height="${H}"></canvas><i class="cpdot" id="cpdot"></i></div>
+    <p class="muted" style="font-size:13px;margin:6px 2px">👆 اضغط على السلعة في الصورة إذا اللون ماشي هو</p>
+    <div class="cpres"><i id="cpsw"></i><input class="in" id="cpname"></div>
+    <div class="grid2" style="margin-top:10px"><button class="btn" onclick="cpOk(false)">✅ ${idx >= 0 ? "حطّو" : "زيد هاد اللون"}</button>${idx >= 0 ? `<button class="btn ghost" onclick="closeCP()">رجوع</button>` : `<button class="btn ghost" onclick="cpOk(true)">➕ زيد وكمّل</button>`}</div></div>`;
+  document.body.appendChild(o);
+  const cv = $("#cpc"), ctx = cv.getContext("2d", {willReadFrequently: true}); ctx.drawImage(im, 0, 0, W, H);
+  CP = {idx, ctx, W, H};
+  const set = (rgb, x, y) => { CP.hex = toHex(...rgb); $("#cpsw").style.background = CP.hex; $("#cpname").value = colorName(...rgb); const dt = $("#cpdot"); dt.style.left = (x / W * 100) + "%"; dt.style.top = (y / H * 100) + "%"; dt.style.background = CP.hex; };
+  set(dominantColor(ctx, W, H), W / 2, H / 2);
+  cv.onclick = e => { const r = cv.getBoundingClientRect(), x = Math.round((e.clientX - r.left) / r.width * W), y = Math.round((e.clientY - r.top) / r.height * H); set(spotColor(ctx, x, y), x, y); };
+}
+function closeCP() { const o = $("#cpov"); if (o) o.remove(); CP = null; }
+function cpOk(more) {
+  const name = $("#cpname").value.trim(); if (!name) return toast("اكتب اسم اللون");
+  EP.vrows = EP.vrows || [];
+  if (CP.idx >= 0 && EP.vrows[CP.idx]) Object.assign(EP.vrows[CP.idx], {name, hex: CP.hex});
+  else EP.vrows.push({vid: "", name, hex: CP.hex, bc: "", isVar: true});
+  drawVRows(); toast("🎨 " + name, 1200);
+  if (more) { const W = CP.W, H = CP.H; toast("👆 اضغط على لون آخر في الصورة", 2200); return; }
+  closeCP();
 }
 /* الصور: الأولى هي الرئيسية (تبان في القائمة والكاسة)، والباقي يبانو للزبون كي يحل السلعة */
 const IMG_MAX = 6;
