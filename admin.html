@@ -429,6 +429,13 @@ html[data-theme="dark"] .pacts button{background:var(--card)!important;color:var
 .tnav .btn{font-size:15px;padding:12px 8px}.tnav .btn[disabled]{opacity:.35;pointer-events:none}
 .tnav-c{text-align:center;line-height:1.3}.tnav-c b{display:block;font-size:14px}.tnav-c small{color:var(--muted);font-size:12px}
 
+/* البونات اللي فاتو داخل الكاسة */
+.pd-lines.rv{outline:3px solid #E8721C;outline-offset:-3px;border-radius:16px}
+.rvbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:100%;background:#FFF1E2;border-radius:12px;padding:8px 10px;color:#3B1F14}
+.rvbar b{font-size:15px}.rvbar .rvb{display:flex;gap:6px;margin-inline-start:auto;flex-wrap:wrap}.rvbar .mini[disabled]{opacity:.35}
+html[data-theme="dark"] .rvbar{background:#3A2616;color:#F2E8DF}
+.rvt td.nm{font-weight:700}
+
 </style>
 </head>
 <body>
@@ -446,7 +453,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.6.2";
+const APP_VERSION = "1.6.3";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -2142,11 +2149,11 @@ function renderPD() {
       <div class="pd-top">
         <div class="pd-total"><small>المجموع</small><b id="pdtot">0 دج</b><button class="pd-disc" onclick="pdDisc()" id="pddisc">تخفيض</button></div>
         <div class="pd-card"><small>السلع</small><b id="pdcount">0 سطر · 0 قطعة</b><span class="muted" id="pdhint">سكانّي سلعة باش تبدا</span></div>
-        <div class="pd-card" style="position:relative"><small>البون</small><b id="pdno">—</b>${own ? `<button class="pd-prev" title="البونات اللي فاتو" onclick="prevSale()">◀ البونات<br>اللي فاتو</button>` : ""}<span class="muted">👤 ${esc(S.me.name)} · <bdi id="pdclock">${new Date().toLocaleTimeString("fr-FR")}</bdi></span></div>
+        <div class="pd-card" style="position:relative"><small>البون</small><b id="pdno">—</b>${own ? `<button class="pd-prev" title="البونات اللي فاتو" onclick="rvNav(1)">◀ البونات<br>اللي فاتو</button>` : ""}<span class="muted">👤 ${esc(S.me.name)} · <bdi id="pdclock">${new Date().toLocaleTimeString("fr-FR")}</bdi></span></div>
       </div>
       <div class="pd-scan"><span>🔍</span><input id="pq" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="سكانّي الباركود ولا اكتب اسم السلعة هنا..." oninput="S.ui.pq=this.value;S.ui.si=0;posSuggest()" onkeydown="posKey(event)" onfocus="posSuggest()"><button onclick="scanBarcode(posCode)" title="الكاميرا">📷</button><div id="psug" class="sug"></div></div>
       <div class="pd-mid">
-        <div class="pd-lines">
+        <div class="pd-lines" id="pdlines">
           <div class="pd-held" id="pdheld"></div>
           <div class="pd-tbl" id="dlines"></div>
           <div class="pd-cust" id="pdcust"></div>
@@ -2171,6 +2178,9 @@ function kp(d) {
 }
 function kpShow() { const e = $("#kpd"); if (e) e.textContent = S.ui.mult || "1"; e && e.parentElement.parentElement.classList.toggle("on", !!S.ui.mult); }
 function drawPD() {
+  if (S.cart.length) S.ui.rv = null;
+  if (S.ui.rv) return drawRV(S.ui.rv);
+  { const pl = $("#pdlines"); if (pl) pl.classList.remove("rv"); }
   const n = S.cart.length, tot = cartTot(), pcs = S.cart.reduce((a, i) => a + (i.unit === "kg" ? 1 : i.qty), 0);
   if (S.ui.sel == null || S.ui.sel >= n) S.ui.sel = n - 1;
   $("#pdtot").innerHTML = fmt(tot);
@@ -2273,7 +2283,8 @@ document.addEventListener("keydown", e => {
   if ($("#ov .tnav") && /^(ArrowRight|ArrowLeft|PageUp|PageDown)$/.test(k) && !((document.activeElement || {}).closest && document.activeElement.closest("#ov") && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) { e.preventDefault(); navSale(k === "ArrowRight" || k === "PageUp" ? 1 : -1); return; }
   if (S.tab === "pos" && $("#pd")) {
     if ($("#ov")) { if (k === "Escape") { closeModal(); posFocus(); } return; }
-    if ((k === "ArrowRight" || k === "ArrowLeft") && isOwner() && !(S.ui.sugg || []).length && !(document.activeElement && document.activeElement.value)) { e.preventDefault(); prevSale(); return; }
+    if ((k === "ArrowRight" || k === "ArrowLeft" || k === "PageUp" || k === "PageDown") && isOwner() && !S.cart.length && !(S.ui.sugg || []).length && !(document.activeElement && document.activeElement.value)) { e.preventDefault(); rvNav(k === "ArrowRight" || k === "PageUp" ? 1 : -1); return; }
+    if (k === "Escape" && S.ui.rv) { e.preventDefault(); rvExit(); return; }
     const map = {F2: "new", F3: "qty", F4: "price", F5: "ret", F6: "debt", F7: "list", F8: "hold", F9: "exit", F10: "cancel", F11: "sell", F12: "sellp"};
     if (map[k]) { e.preventDefault(); pdAct(map[k]); return; }
     const inInput = document.activeElement && document.activeElement.id === "pq";
@@ -2288,6 +2299,38 @@ document.addEventListener("keydown", e => {
 });
 let PD_W = posDesk();
 window.addEventListener("resize", () => { const w = posDesk(); if (w !== PD_W) { PD_W = w; if (S.tab === "pos") layout(); } });
+
+/* 📜 البونات اللي فاتو في الكاسة (كيما سهلها): الأسهم ← → يبدّلو البون اللي يبان */
+async function rvNav(d) {
+  if (!isOwner()) return;
+  if (S.cart.length) return toast("كمّل البون الحالي ولا علّقو (F8) قبل");
+  let l = allSales();
+  if (!S.ui.rv) { if (!l.length) { await loadOlder(); l = allSales(); } if (!l.length) return toast("ما كاين حتى بون"); S.ui.rv = l[0]; drawPD(); posFocus(); return; }
+  let i = l.findIndex(x => x.id === S.ui.rv.id);
+  if (i < 0) { S.ui.rv = l[0]; drawPD(); return; }
+  if (d > 0 && i + 1 >= l.length) { const r = await loadOlder(); if (r === null) return; if (!r) return toast("هادا أول بون"); l = allSales(); }
+  const nx = l[i + d];
+  if (nx) { S.ui.rv = nx; drawPD(); } else if (d < 0) rvExit();
+}
+function rvExit() { S.ui.rv = null; drawPD(); posFocus(); }
+function drawRV(s) {
+  const L = allSales(), ix = L.findIndex(x => x.id === s.id), T = daySales(), it = T.findIndex(x => x.id === s.id), items = s.items || [];
+  const d = new Date(s.ts), pcs = items.reduce((a, i) => a + (i.unit === "kg" ? 1 : i.qty), 0);
+  const when = it >= 0 ? `اليوم · بون <bdi>${T.length - it}</bdi> من <bdi>${T.length}</bdi>` : `📅 <bdi>${d.toLocaleDateString("fr-FR")}</bdi>`;
+  $("#pdtot").innerHTML = fmt(s.total);
+  $("#pddisc").innerHTML = s.disc ? `تخفيض: −${fmtT(s.disc)}` : "تخفيض";
+  $("#pdcount").innerHTML = `<bdi>${items.length}</bdi> سطر · <bdi>${r2(pcs)}</bdi> قطعة`;
+  $("#pdhint").innerHTML = `🕘 <bdi>${d.toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"})}</bdi> · 👤 ${esc(s.byName || "")}`;
+  $("#pdno").innerHTML = `بون <bdi>#${esc(s.code)}</bdi>`;
+  $("#pdheld").innerHTML = `<div class="rvbar"><b>📜 ${when}</b><span class="muted">← → باش تتنقّل · Échap للرجوع</span>
+    <span class="rvb"><button class="mini" ${ix < L.length - 1 || !S.ui.oldEnd ? "" : "disabled"} onclick="rvNav(1)">▶ قبلو</button><button class="mini" onclick="rvNav(-1)">${ix > 0 ? "بعدو ◀" : "البيع ◀"}</button>
+    <button class="mini" onclick="printTicket(S.ui.rv)">🖨️ طباعة</button><button class="mini" onclick="openSale(S.ui.rv.id)">🧾 البون</button><button class="mini red" onclick="rvExit()">✖ رجوع للبيع</button></span></div>`;
+  $("#dlines").innerHTML = `<table class="rvt"><thead><tr><th>#</th><th>السلعة</th><th>الكمية</th><th>السعر</th><th>المجموع</th></tr></thead><tbody>${items.map((x, i) => `<tr>
+    <td class="i">${i + 1}</td><td class="nm">${esc(x.name)}</td><td class="q"><b><bdi>${x.unit === "kg" ? fmtQ({unit: "kg"}, x.qty) : x.qty}</bdi></b></td><td>${fmt(x.price)}</td><td class="t">${fmt(x.total != null ? x.total : x.qty * x.price)}</td></tr>`).join("")}</tbody></table>`;
+  $("#pdcust").innerHTML = s.pay === "debt" ? `<span>👤 ${esc(s.cname || "زبون")} · خلّص ${fmt(s.paid || 0)} · <b style="color:var(--brand-d)">الباقي كريدي ${fmt(s.total - (s.paid || 0))}</b></span>` : `<span class="muted">💵 نقداً</span>`;
+  const pl = $("#pdlines"); if (pl) pl.classList.add("rv");
+  kpShow(); drawPDGrid();
+}
 
 /* ============================================================
    🔐 الدخول بالكود (كيما سهلها): المدير، الأدمن، العامل
