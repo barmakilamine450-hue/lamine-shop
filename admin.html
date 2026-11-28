@@ -436,6 +436,18 @@ html[data-theme="dark"] .pacts button{background:var(--card)!important;color:var
 html[data-theme="dark"] .rvbar{background:#3A2616;color:#F2E8DF}
 .rvt td.nm{font-weight:700}
 
+/* صور السلعة */
+.imgs{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+.imgs .im{position:relative;width:84px;height:84px;border-radius:16px;overflow:visible;flex:none}
+.imgs .im img{width:84px;height:84px;border-radius:16px;object-fit:cover;display:block;cursor:pointer;box-shadow:var(--shadow)}
+.imgs .im.main img{outline:3px solid var(--brand);outline-offset:2px}
+.imgs .im .del{position:absolute;top:-8px;left:-8px;width:26px;height:26px;border-radius:50%;background:var(--bad);color:#fff;font-weight:900;font-size:16px;line-height:24px;padding:0}
+.imgs .im .st{position:absolute;bottom:-8px;left:-8px;width:28px;height:28px;border-radius:50%;background:var(--card);font-size:15px;padding:0;box-shadow:var(--shadow)}
+.imgs .im .tag{position:absolute;bottom:-9px;right:6px;background:var(--brand);color:#fff;font-size:10.5px;font-weight:900;border-radius:8px;padding:1px 6px}
+.imgs .im.add{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--line);font-size:26px;cursor:pointer;background:var(--soft);border-radius:16px}
+.imgs .im.add small{font-size:11.5px;font-weight:800;color:var(--muted)}
+.imgs .imgs-n{width:100%;font-size:12px;margin-top:4px}
+
 </style>
 </head>
 <body>
@@ -453,7 +465,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.7.1";
+const APP_VERSION = "1.7.2";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1492,10 +1504,10 @@ function editProduct(id, preset={}) {
   if (!isOwner()) return toast("غير مول المحل يقدر يبدّل السلع");
   const p = id ? prod(id) : null, inv = id ? S.inv[id] || {} : {};
   EP = p ? {...p} : {id: uid(), name: "", cat: "", unit: "piece", unitName: "حبة", price: "", img: "", desc: "", active: true, stock: true, ...preset};
+  EP.imgs = EP.img ? [EP.img] : []; EP._extra0 = 0;
   const cats = [...new Set(S.products.map(x => x.cat).filter(Boolean))];
   modal(`<h2>${p ? "✏️ تعديل السلعة" : "➕ سلعة جديدة"}<button class="x" onclick="closeModal()">×</button></h2>
-    <div style="display:flex;gap:12px;align-items:center"><div id="e_prev">${EP.img ? `<img class="th" style="width:84px;height:84px;border-radius:16px;object-fit:cover" src="${EP.img}">` : `<div class="th" style="width:84px;height:84px">📷</div>`}</div>
-      <label class="mini" style="cursor:pointer">📷 اختار صورة<input type="file" accept="image/*" class="hidden" onchange="pickImg(this)"></label></div>
+    <div class="imgs" id="e_prev"></div>
     <label class="f">اسم السلعة</label><input class="in" id="e_name" value="${esc(EP.name)}" placeholder="مثلاً: شوكولا سوداء">
     <label class="f">الصنف</label><input class="in" id="e_cat" list="catl" value="${esc(EP.cat)}" placeholder="شوكولا، تزيين، تغليف..."><datalist id="catl">${cats.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
     <label class="f">كيفاش تتباع؟</label>
@@ -1515,7 +1527,8 @@ function editProduct(id, preset={}) {
     <div class="err" id="e_err"></div>
     <button class="btn" id="e_save" onclick="saveProd(${id ? "true" : "false"})">💾 حفظ</button>
     ${p ? `<div style="height:8px"></div><button class="btn ghost" style="color:var(--bad)" onclick="ask('تحذف «${esc(p.name).replace(/'/g, "")}» نهائياً؟',()=>delProduct('${p.id}'))">🗑️ حذف السلعة</button>` : ""}`);
-  uSync();
+  uSync(); drawImgs();
+  if (p) DB.get("pimgs", p.id).then(d => { if (!d || EP.id !== p.id) return; const ex = (d.imgs || []).filter(Boolean); EP._extra0 = ex.length; EP.imgs = [...EP.imgs, ...ex]; drawImgs(); }).catch(() => {});
 }
 function uSync() {
   $("#u_piece").classList.toggle("on", EP.unit !== "kg"); $("#u_kg").classList.toggle("on", EP.unit === "kg");
@@ -1523,13 +1536,26 @@ function uSync() {
   $("#e_plab").textContent = EP.unit === "kg" ? "سعر بيع الكيلو (دج)" : "سعر البيع (دج)";
   $("#e_clab").textContent = EP.unit === "kg" ? "سعر شراء الكيلو (دج)" : "سعر الشراء (دج)";
 }
-function pickImg(inp) {
-  const f = inp.files[0]; if (!f) return;
-  const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => {
-    const M = 640, s = Math.min(1, M / Math.max(im.width, im.height)), c = document.createElement("canvas");
-    c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
-    EP.img = c.toDataURL("image/jpeg", 0.72); $("#e_prev").innerHTML = `<img class="th" style="width:84px;height:84px;border-radius:16px;object-fit:cover" src="${EP.img}">`;
-  }; im.src = r.result; }; r.readAsDataURL(f);
+/* الصور: الأولى هي الرئيسية (تبان في القائمة والكاسة)، والباقي يبانو للزبون كي يحل السلعة */
+const IMG_MAX = 6;
+function drawImgs() {
+  const b = $("#e_prev"); if (!b) return; const L = EP.imgs || [];
+  b.innerHTML = L.map((src, i) => `<div class="im ${i ? "" : "main"}"><img src="${src}" onclick="${i ? `mainImg(${i})` : ""}"><button class="del" onclick="delImg(${i})">×</button>${i ? `<button class="st" onclick="mainImg(${i})">⭐</button>` : `<span class="tag">الرئيسية</span>`}</div>`).join("")
+    + (L.length < IMG_MAX ? `<label class="im add">📷<small>${L.length ? "زيد صور" : "زيد صورة"}</small><input type="file" accept="image/*" multiple class="hidden" onchange="pickImg(this)"></label>` : "")
+    + `<small class="muted imgs-n">${L.length}/${IMG_MAX} · الصورة الأولى هي الرئيسية</small>`;
+}
+function delImg(i) { EP.imgs.splice(i, 1); drawImgs(); }
+function mainImg(i) { const [x] = EP.imgs.splice(i, 1); EP.imgs.unshift(x); drawImgs(); toast("⭐ ولّات الصورة الرئيسية", 1500); }
+function shrinkImg(src, M, q) {
+  return new Promise(res => { const im = new Image(); im.onload = () => { const s = Math.min(1, M / Math.max(im.width, im.height)), c = document.createElement("canvas"); c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL("image/jpeg", q)); }; im.onerror = () => res(src); im.src = src; });
+}
+async function pickImg(inp) {
+  const fs = [...(inp.files || [])]; inp.value = "";
+  for (const f of fs) {
+    if ((EP.imgs || []).length >= IMG_MAX) { toast(`أكثر حاجة ${IMG_MAX} صور`); break; }
+    const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+    EP.imgs.push(await shrinkImg(url, EP.imgs.length ? 900 : 640, EP.imgs.length ? 0.7 : 0.72)); drawImgs();
+  }
 }
 async function saveProd(isEdit) {
   EP.name = $("#e_name").value.trim(); EP.cat = $("#e_cat").value.trim(); EP.price = num($("#e_price").value);
@@ -1539,7 +1565,9 @@ async function saveProd(isEdit) {
   const bc = $("#e_bc").value.trim();
   if (bc && EP._bcOk !== bc) { const dup = Object.keys(S.inv).find(k => k !== EP.id && S.inv[k].barcode === bc); if (dup && prod(dup)) { $("#e_err").innerHTML = `⚠️ هاد الباركود مسجّل حتى لـ «${esc(prod(dup).name)}». إذا هوما سلعتين عندهم نفس الباركود (كيما أذواق الدادة):<br><button class="btn ghost sm" style="margin-top:8px" onclick="EP._bcOk='${esc(bc)}';saveProd(${isEdit ? "true" : "false"})">✅ إيه، خلّي نفس الباركود · حفظ</button>`; return; } }
   EP.ts = EP.ts || Date.now();
-  const {id, ...d} = EP, ops = [{t: "set", c: "products", id, d}];
+  EP.img = EP.imgs && EP.imgs[0] ? await shrinkImg(EP.imgs[0], 640, 0.72) : "";
+  const extra = (EP.imgs || []).slice(1);
+  const {id, imgs: _i, _bcOk: _b, _extra0: _e, ...d} = EP, ops = [{t: "set", c: "products", id, d}];
   const minS = $("#e_min").value.trim(), invD = {barcode: bc, min: minS === "" ? null : num(minS), updatedAt: Date.now()};
   const costS = $("#e_cost").value.trim(); if (costS !== "") ops.push({t: "set", c: "costs", id, d: {cost: num(costS), ts: Date.now()}, merge: true});
   const qEl = $("#e_qty"), qS = qEl ? qEl.value.trim() : "";
@@ -1557,12 +1585,13 @@ async function saveProd(isEdit) {
   const expEl = $("#e_exp"), exp = expEl ? expEl.value : "";
   if (/^\d{4}-\d\d-\d\d$/.test(exp)) ops.push({t: "set", c: "batches", id: uid(), d: {pid: id, name: EP.name, barcode: bc, exp, qty: qS, alerts: [30, 7, 1], note: "", done: false, created: Date.now(), ts: Date.now(), by: S.me.name}});
   try { await commitFast(ops, "product"); closeModal(); toast(exp ? "✅ تحفظت السلعة + تاريخ الانتهاء" : "✅ تحفظت السلعة");
+    if (extra.length || EP._extra0) (extra.length ? DB.set("pimgs", id, {imgs: extra, ts: Date.now()}) : DB.remove("pimgs", id)).then(() => extra.length && toast(`🖼️ تحفظو ${extra.length + 1} صور`, 1800)).catch(e => toast("⚠️ الصور الزايدة ما تحفظوش: لازم تنشر قواعد Firebase الجداد", 6000));
     if (!isEdit) { if (bc) { S.inv[id] = Object.assign(S.inv[id] || {}, {barcode: bc}); } setTimeout(() => ask(`✅ تحفظت «${esc(EP.name)}». تطبع الملصق تاعها؟`, () => openLabel(id), "🏷️ إيه، اطبع", false), 400); } }
   catch (e) { $("#e_err").textContent = "ما تحفظتش (الصلاحيات ولا حجم الصورة)"; $("#e_save").disabled = false; }
 }
 async function delProduct(id) {
   await commitFast([{t: "delete", c: "products", id}, {t: "delete", c: "inv", id}, {t: "delete", c: "costs", id}], "delProduct");
-  closeModal(); toast("🗑️ تحذفت");
+  closeModal(); toast("🗑️ تحذفت"); DB.remove("pimgs", id).catch(() => {});
 }
 
 /* ============================================================
