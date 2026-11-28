@@ -465,7 +465,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.7.2";
+const APP_VERSION = "1.7.3";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1541,8 +1541,8 @@ const IMG_MAX = 6;
 function drawImgs() {
   const b = $("#e_prev"); if (!b) return; const L = EP.imgs || [];
   b.innerHTML = L.map((src, i) => `<div class="im ${i ? "" : "main"}"><img src="${src}" onclick="${i ? `mainImg(${i})` : ""}"><button class="del" onclick="delImg(${i})">×</button>${i ? `<button class="st" onclick="mainImg(${i})">⭐</button>` : `<span class="tag">الرئيسية</span>`}</div>`).join("")
-    + (L.length < IMG_MAX ? `<label class="im add">📷<small>${L.length ? "زيد صور" : "زيد صورة"}</small><input type="file" accept="image/*" multiple class="hidden" onchange="pickImg(this)"></label>` : "")
-    + `<small class="muted imgs-n">${L.length}/${IMG_MAX} · الصورة الأولى هي الرئيسية</small>`;
+    + (L.length < IMG_MAX ? `<label class="im add">🖼️<small>من الصور</small><input type="file" accept="image/*" multiple class="hidden" onchange="pickImg(this)"></label><label class="im add">📸<small>صوّر</small><input type="file" accept="image/*" capture="environment" class="hidden" onchange="pickImg(this)"></label>` : "")
+    + `<small class="muted imgs-n">${L.length}/${IMG_MAX} · الأولى هي الرئيسية · 💡 صورة أشبح: صوّر بـ «Portrait» في كاميرا الهاتف ومن بعد «من الصور»</small>`;
 }
 function delImg(i) { EP.imgs.splice(i, 1); drawImgs(); }
 function mainImg(i) { const [x] = EP.imgs.splice(i, 1); EP.imgs.unshift(x); drawImgs(); toast("⭐ ولّات الصورة الرئيسية", 1500); }
