@@ -171,6 +171,10 @@ footer a{color:var(--brand-d);font-weight:700;text-decoration:none}
 .pgal::-webkit-scrollbar{display:none}
 .pgal img{flex:0 0 100%;width:100%;height:260px;object-fit:cover;scroll-snap-align:center;border-radius:16px}
 .pdots{display:flex;justify-content:center;gap:6px;margin:0 0 8px;min-height:8px}.pdots i{width:8px;height:8px;border-radius:50%;background:#E3D3C4}.pdots i.on{background:#E8721C;width:20px;border-radius:5px}
+.vdots{display:flex;align-items:center;gap:3px;margin:2px 0}.vdots i{width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(0,0,0,.12)}.vdots small{font-size:11px;color:var(--muted);margin-right:4px}
+.vch{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 6px}.vch button{display:inline-flex;align-items:center;gap:8px;border:2px solid #EADBCD;background:#fff;border-radius:14px;padding:8px 12px;font:inherit;font-weight:800;font-size:14.5px;cursor:pointer}
+.vch button i{width:20px;height:20px;border-radius:50%;border:2px solid rgba(0,0,0,.12)}.vch button.on{border-color:#E8721C;background:#FFF1E2}
+.vch.shake{animation:vsh .5s}@keyframes vsh{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 </style>
 </head>
 <body>
@@ -317,6 +321,7 @@ function renderGrid(){
     <div class="b">
       ${p.unit==="kg"?`<span class="tag">⚖️ بالميزان</span>`:""}
       <div class="nm">${esc(p.name)}</div>
+      ${vars(p).length?`<div class="vdots">${vars(p).slice(0,6).map(x=>`<i style="background:${esc(x.hex||"#ccc")}"></i>`).join("")}<small>${vars(p).length} ألوان</small></div>`:""}
       ${p.cat?`<div class="cat">${esc(p.cat)}</div>`:""}
       <div class="price">${priceLabel(p)}</div>
       <button class="add" ${p.stock===false?"disabled":""} onclick="openProduct('${p.id}')">${p.stock===false?"غير متوفر":"+ أضف للسلة"}</button>
@@ -332,13 +337,15 @@ function openPrices(){
     <button class="btn ghost" style="margin-top:12px" onclick="closeModal()">رجوع</button>`);
 }
 let pick={};
+const vars=p=>((p&&p.variants)||[]).filter(x=>x&&x.name);
 function openProduct(id){
   const p=S.products.find(x=>x.id===id); if(!p) return;
-  pick={p, grams:SHOP.ratlGrams<1000?1000:1000, qty:1, custom:""};
+  pick={p, grams:SHOP.ratlGrams<1000?1000:1000, qty:1, custom:"", v:""};
   modal(`<h2>${esc(p.name)}<button class="x" onclick="closeModal()">×</button></h2>
     ${p.img?`<div class="pgal" id="pgal"><img src="${p.img}"></div><div class="pdots" id="pdots"></div>`:""}
     ${p.desc?`<p style="color:var(--muted);margin:4px 0 8px">${esc(p.desc)}</p>`:""}
     <div class="price" style="font-size:20px">${priceLabel(p)}</div>
+    ${vars(p).length?`<label class="f">🎨 اختار اللون</label><div class="vch" id="vch">${vars(p).map(x=>`<button data-v="${esc(x.id)}" onclick="pick.v=this.dataset.v;[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this))"><i style="background:${esc(x.hex||"#ccc")}"></i>${esc(x.name)}</button>`).join("")}</div>`:""}
     <div id="qbox"></div>
     <div class="total"><span>المجموع</span><span id="ptot"></span></div>
     <button class="btn" onclick="addToCart()">أضف للسلة</button>`);
@@ -361,8 +368,10 @@ function updT(){const p=pick.p;const t=p.unit==="kg"?p.price*pick.grams/1000:p.p
 function addToCart(){
   const p=pick.p;
   if(p.unit==="kg"&&(!pick.grams||pick.grams<50)){toast("اختار الوزن");return}
-  const it={pid:p.id,name:p.name,img:p.img?p.img:"",unit:p.unit,unitName:p.unitName||"",price:p.price,grams:p.unit==="kg"?pick.grams:0,qty:p.unit==="kg"?1:pick.qty};
-  const same=S.cart.find(x=>x.pid===it.pid&&x.unit===it.unit&&(it.unit==="kg"?x.grams===it.grams:true));
+  if(vars(p).length&&!pick.v){toast("🎨 اختار اللون");const v=$("#vch");v&&v.classList.add("shake");setTimeout(()=>v&&v.classList.remove("shake"),600);return}
+  const vx=vars(p).find(x=>x.id===pick.v);
+  const it={pid:p.id,vid:vx?vx.id:"",name:vx?`${p.name} · ${vx.name}`:p.name,img:p.img?p.img:"",unit:p.unit,unitName:p.unitName||"",price:p.price,grams:p.unit==="kg"?pick.grams:0,qty:p.unit==="kg"?1:pick.qty};
+  const same=S.cart.find(x=>x.pid===it.pid&&(x.vid||"")===it.vid&&x.unit===it.unit&&(it.unit==="kg"?x.grams===it.grams:true));
   if(same){if(it.unit==="kg")same.qty=(same.qty||1)+1,same.grams+=0;else same.qty+=it.qty}
   else S.cart.push(it);
   if(same&&it.unit==="kg"){same.grams=same.grams; }

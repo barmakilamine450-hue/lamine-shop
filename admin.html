@@ -448,6 +448,19 @@ html[data-theme="dark"] .rvbar{background:#3A2616;color:#F2E8DF}
 .imgs .im.add small{font-size:11.5px;font-weight:800;color:var(--muted)}
 .imgs .imgs-n{width:100%;font-size:12px;margin-top:4px}
 
+/* الألوان / الأنواع */
+.vsw{display:inline-block;width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,0,0,.15);vertical-align:-4px;flex:none}
+.vbox{background:var(--soft);border-radius:16px;padding:12px;margin-top:14px}
+.vhd b{display:block;font-size:15px}.vhd small{display:block;font-size:12.5px;line-height:1.5;margin:2px 0 6px}
+.vrow{display:flex;gap:6px;align-items:center;margin-top:8px}
+.vrow .vcol{width:40px;height:40px;border:0;border-radius:12px;padding:0;background:none;flex:none}
+.vrow .vname{flex:1.1;min-width:0}.vrow .vbc{flex:1.3;min-width:0}
+.vrow .vlab{flex:1.1;font-weight:800;font-size:13px;color:var(--muted)}
+.vchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.vchips span{display:inline-flex;align-items:center;gap:6px;background:var(--soft);border-radius:12px;padding:6px 10px;font-weight:800;font-size:13.5px}
+.vchips small{color:var(--muted);font-weight:500}
+#bcpick .th .vsw{width:28px;height:28px}
+.vrow .vname{flex:1}.vrow .vbc{flex:1.8;font-size:14.5px;padding-left:8px;padding-right:8px;letter-spacing:.3px}
+
 </style>
 </head>
 <body>
@@ -465,7 +478,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.7.3";
+const APP_VERSION = "1.8.0";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1151,24 +1164,42 @@ VIEWS.pos = {
   after() { if ($("#pd")) { drawPD(); posFocus(); return; } this.draw(); },
   draw() { if ($("#pd")) return drawPD(); drawGrid("#pgrid", "#pchips"); drawCart(); if (document.activeElement && document.activeElement.id === "pq") posSuggest(); }
 };
-/* باركود واحد لعدة سلع (كيما أذواق نفس المنتوج): نسقسيو أي وحدة */
-const bcList = code => Object.keys(S.inv).filter(k => code && S.inv[k].barcode === code && prod(k));
+/* الباركودات: الرئيسي (inv.barcode) + باركودات أخرى (inv.bcs = [{bc, v}]) — v = اللون/النوع */
+function bcHits(code) {
+  if (!code) return []; const out = [];
+  for (const k in S.inv) { if (!prod(k)) continue; const iv = S.inv[k] || {};
+    if (iv.barcode === code) out.push({pid: k, v: ""});
+    (iv.bcs || []).forEach(b => { if (b && b.bc === code) out.push({pid: k, v: b.v || ""}); }); }
+  return out;
+}
+const bcList = code => [...new Set(bcHits(code).map(h => h.pid))];
+const pVars = p => ((p && p.variants) || []).filter(x => x && x.name);
+const varName = (p, v) => { const x = v && pVars(p).find(z => z.id === v); return x ? x.name : ""; };
+const allBcs = pid => { const iv = S.inv[pid] || {}; return [iv.barcode, ...(iv.bcs || []).map(b => b.bc)].filter(Boolean); };
+const sw = hex => `<i class="vsw" style="background:${esc(hex || "#ccc")}"></i>`;
 function pickByBarcode(code, cb, none) {
-  const L = bcList(code);
+  const L = bcHits(code);
   if (!L.length) return none ? none() : toast("ما لقيتش: " + code, 2500);
-  if (L.length === 1) return cb(L[0]);
+  if (L.length === 1) return cb(L[0].pid, L[0].v);
   modal(`<h2>🔢 هاد الباركود عندو ${L.length} سلع — أي وحدة؟<button class="x" onclick="closeModal();posFocus&&posFocus()">×</button></h2>
-    <div class="list" id="bcpick">${L.map((id, i) => { const p = prod(id); return `<div class="it" onclick="closeModal();BCPICK('${id}')"><div class="th" style="font-weight:900">${i + 1}</div>${thumb(p)}<div class="t"><b>${esc(p.name)}</b><small>${fmt(p.price)}</small></div></div>`; }).join("")}</div>
+    <div class="list" id="bcpick">${L.map((h, i) => { const p = prod(h.pid), vn = varName(p, h.v); return `<div class="it" onclick="closeModal();BCPICK(${i})"><div class="th" style="font-weight:900">${i + 1}</div>${thumb(p)}<div class="t"><b>${esc(p.name)}${vn ? ` · ${esc(vn)}` : ""}</b><small>${fmt(p.price)}</small></div></div>`; }).join("")}</div>
     <p class="muted" style="font-size:13px;margin:8px 2px 0">⌨️ تقدر تضغط الرقم ${L.length <= 9 ? `(1 — ${L.length})` : ""}</p>`);
-  window.BCPICK = id => { window.BCPICK = null; cb(id); };
+  window.BCPICK = i => { window.BCPICK = null; cb(L[i].pid, L[i].v); };
+}
+// السلعة عندها ألوان: نسقسيو أي لون
+function chooseVariant(p) {
+  const V = pVars(p);
+  modal(`<h2>🎨 ${esc(p.name)} — أي لون؟<button class="x" onclick="closeModal();posFocus&&posFocus()">×</button></h2>
+    <div class="list" id="bcpick">${V.map((x, i) => `<div class="it" onclick="closeModal();posAdd('${p.id}','${x.id}');posFocus&&posFocus()"><div class="th" style="font-weight:900">${i + 1}</div><div class="th">${sw(x.hex)}</div><div class="t"><b>${esc(x.name)}</b><small>${fmt(p.price)}</small></div></div>`).join("")}</div>
+    <p class="muted" style="font-size:13px;margin:8px 2px 0">⌨️ تقدر تضغط الرقم · ولا سكانّي الباركود تاع اللون ديريكت</p>`);
 }
 document.addEventListener("keydown", e => { const b = $("#bcpick"); if (!b || !/^[1-9]$/.test(e.key)) return; const it = b.children[+e.key - 1]; if (it) { e.preventDefault(); e.stopPropagation(); it.click(); } }, true);
 /* اقتراحات وانت تكتب */
 function posMatches(q) {
   q = (q || "").trim().toLowerCase(); if (!q) return [];
-  const exact = Object.keys(S.inv).filter(k => S.inv[k].barcode === q && prod(k)).map(prod);
+  const exact = bcList(q).map(prod);
   const words = q.split(/\s+/);
-  const m = S.products.filter(p => !exact.includes(p)).map(p => { const h = (p.name + " " + (p.cat || "") + " " + ((S.inv[p.id] || {}).barcode || "")).toLowerCase(); const ok = words.every(w => h.includes(w)); return ok ? {p, s: p.name.toLowerCase().startsWith(q) ? 0 : 1} : null; }).filter(Boolean).sort((a, b) => a.s - b.s).map(x => x.p);
+  const m = S.products.filter(p => !exact.includes(p)).map(p => { const h = (p.name + " " + (p.cat || "") + " " + allBcs(p.id).join(" ") + " " + pVars(p).map(x => x.name).join(" ")).toLowerCase(); const ok = words.every(w => h.includes(w)); return ok ? {p, s: p.name.toLowerCase().startsWith(q) ? 0 : 1} : null; }).filter(Boolean).sort((a, b) => a.s - b.s).map(x => x.p);
   return [...exact, ...m].slice(0, 8);
 }
 function posSuggest() {
@@ -1179,7 +1210,7 @@ function posSuggest() {
   box.innerHTML = list.map((p, i) => { const st = stockState(p.id); return `<button class="sg ${i === si ? "sel" : ""}" onmousedown="event.preventDefault()" onclick="posPick('${p.id}')">${thumb(p)}<span class="t"><b>${esc(p.name)}</b><small>${fmt(p.price)} / ${esc(isKg(p) ? "كغ" : unitN(p))}</small></span>${st === "na" ? "" : st === "out" ? `<span class="pill p-bad">نفدت</span>` : `<span class="pill ${st === "low" ? "p-warn" : "p-ok"}">${fmtQ(p, qtyOf(p.id))}</span>`}</button>`; }).join("");
   box.classList.add("on");
 }
-function posPick(pid) { S.ui.pq = ""; S.ui.si = 0; const i = $("#pq"); if (i) i.value = ""; const b = $("#psug"); if (b) { b.innerHTML = ""; b.classList.remove("on"); } posAdd(pid); }
+function posPick(pid, v) { S.ui.pq = ""; S.ui.si = 0; const i = $("#pq"); if (i) i.value = ""; const b = $("#psug"); if (b) { b.innerHTML = ""; b.classList.remove("on"); } posAdd(pid, v); }
 function posKey(e) {
   const list = S.ui.sugg || [];
   if (e.key === "ArrowDown") { e.preventDefault(); S.ui.si = Math.min((S.ui.si || 0) + 1, list.length - 1); posSuggest(); return; }
@@ -1188,14 +1219,14 @@ function posKey(e) {
   if (e.key !== "Enter") return;
   e.preventDefault();
   const v = e.target.value.trim(); if (!v) { if (S.cart.length) payCash(); return; }
-  if (bcList(v).length) { e.target.value = ""; S.ui.pq = ""; posSuggest(); return pickByBarcode(v, id => { posPick(id); posFocus && posFocus(); }); }
+  if (bcHits(v).length) { e.target.value = ""; S.ui.pq = ""; posSuggest(); return pickByBarcode(v, (id, vv) => { posPick(id, vv); posFocus && posFocus(); }); }
   // رقم صغير (حتى 7 أرقام) + Enter = منتج متنوع بهاد السعر (كيما سهلها)
   if (/^\d{1,7}([.,]\d{1,2})?$/.test(v) && num(v) > 0 && !(S.ui.si > 0)) { addDivers(num(v)); e.target.value = ""; S.ui.pq = ""; posSuggest(); return; }
   if (list.length) return posPick(list[Math.min(S.ui.si || 0, list.length - 1)].id);
   posCode(v); e.target.value = ""; S.ui.pq = ""; posSuggest();
 }
 function posCode(code) {
-  if (bcList(code).length) pickByBarcode(code, id => { posAdd(id); toast("✅ " + prod(id).name, 1200); posFocus && posFocus(); });
+  if (bcHits(code).length) pickByBarcode(code, (id, vv) => { posAdd(id, vv); toast("✅ " + prod(id).name + (vv ? " · " + varName(prod(id), vv) : ""), 1200); posFocus && posFocus(); });
   else { toast("ما لقيتش هاد الباركود: " + code, 3000); if (isOwner()) ask(`الباركود <bdi>${esc(code)}</bdi> ما هوش مسجّل. تحب تزيد سلعة جديدة بيه؟`, () => editProduct(null, {barcode: code}), "➕ زيد", false); }
 }
 /* شبكة السلع */
@@ -1218,14 +1249,16 @@ function openBrowse() {
 }
 function updBrowse() { const d = $("#bdone"); if (d) d.innerHTML = `✔️ رجوع للسلة (${S.cart.length}) — ${fmt(cartTot())}`; if ($("#bgrid")) drawGrid("#bgrid", "#bchips"); }
 function takeMult() { const v = S.ui.mult; S.ui.mult = ""; const n = num(v); return v && n > 0 ? n : null; }
-function posAdd(pid) {
+function posAdd(pid, v) {
   const p = prod(pid); if (!p) return;
+  if (!isKg(p) && v === undefined && pVars(p).length) return chooseVariant(p);
   if (stockState(pid) === "out") toast("⚠️ هاد السلعة مكتوبة «نفدت» في المخزون");
   const m = takeMult();
   if (isKg(p)) { if (m == null) return askWeight(p); return setWeight(pid, m >= 20 ? m / 1000 : m, -1); }
-  const q = m == null ? 1 : m, i = S.cart.findIndex(x => x.pid === pid && x.unit !== "kg");
+  v = v || ""; const vn = varName(p, v);
+  const q = m == null ? 1 : m, i = S.cart.findIndex(x => x.pid === pid && x.unit !== "kg" && (x.v || "") === v);
   if (i >= 0) { S.cart[i].qty = r2(S.cart[i].qty + q); S.ui.sel = i; }
-  else { S.cart.push({pid, name: p.name, unit: "piece", unitName: unitN(p), price: +p.price || 0, qty: q}); S.ui.sel = S.cart.length - 1; }
+  else { S.cart.push({pid, v, name: vn ? `${p.name} · ${vn}` : p.name, unit: "piece", unitName: unitN(p), price: +p.price || 0, qty: q}); S.ui.sel = S.cart.length - 1; }
   S.ui.last = pid; saveCart(); drawCart(); if (navigator.vibrate) navigator.vibrate(15);
 }
 function addDivers(price) {
@@ -1325,7 +1358,7 @@ async function doSale(pay, quick) {
   }
   SALE_BUSY = true; const btn = $("#pbtn"); if (btn) btn.disabled = true;
   const own = isOwner(), now = Date.now(), id = uid(), code = String(now).slice(-6);
-  const items = S.cart.map(i => ({pid: i.pid, name: i.name, unit: i.unit, unitName: i.unitName || "", qty: r2(i.qty), price: r2(i.price), total: r2(i.qty * i.price), ...(own ? {cost: costOf(i.pid)} : {})}));
+  const items = S.cart.map(i => ({pid: i.pid, ...(i.v ? {v: i.v} : {}), name: i.name, unit: i.unit, unitName: i.unitName || "", qty: r2(i.qty), price: r2(i.price), total: r2(i.qty * i.price), ...(own ? {cost: costOf(i.pid)} : {})}));
   const sub = cartSub(), disc = +S.ui.disc || 0, total = cartTot();
   const sale = {code, ts: now, day: todayISO(), by: S.user.uid, byName: S.me.name, items, sub, disc, total, pay, paid: r2(paid)};
   if (cid) Object.assign(sale, {cid, cname});
@@ -1445,7 +1478,7 @@ VIEWS.stock = {
     const q = (S.ui.sq || "").trim().toLowerCase(), f = S.ui.sf;
     let list = S.products;
     if (f === "need") list = list.filter(p => ["low", "out"].includes(stockState(p.id))); else if (f !== "all") list = list.filter(p => stockState(p.id) === f);
-    if (q) list = list.filter(p => (p.name + " " + (p.cat || "") + " " + ((S.inv[p.id] || {}).barcode || "")).toLowerCase().includes(q));
+    if (q) list = list.filter(p => (p.name + " " + (p.cat || "") + " " + allBcs(p.id).join(" ") + " " + pVars(p).map(x => x.name).join(" ")).toLowerCase().includes(q));
     const rank = {out: 0, low: 1, ok: 2, na: 3};
     list = [...list].sort((a, b) => rank[stockState(a.id)] - rank[stockState(b.id)] || a.name.localeCompare(b.name, "ar"));
     $("#slist").innerHTML = list.length ? list.map(p => `<div class="it" onclick="openStock('${p.id}')">${thumb(p)}<div class="t"><b>${esc(p.name)}</b><small>${fmt(p.price)} / ${esc(isKg(p) ? "كغ" : unitN(p))} · ${esc(p.cat || "بلا صنف")}${p.active === false ? " · 🙈 مخفية" : ""}</small></div>
@@ -1458,6 +1491,7 @@ async function openStock(pid) {
   const inv = S.inv[pid] || null, q = qtyOf(pid), own = isOwner();
   S.ui.adj = "in";
   modal(`<h2><span style="display:flex;gap:10px;align-items:center">${thumb(p)}<span>${esc(p.name)}<br><small class="muted">${fmt(p.price)} / ${esc(isKg(p) ? "كغ" : unitN(p))}</small></span></span><button class="x" onclick="closeModal()">×</button></h2>
+    ${pVars(p).length ? `<div class="vchips">${pVars(p).map(x => { const b = ((inv || {}).bcs || []).find(z => z.v === x.id); return `<span>${sw(x.hex)}${esc(x.name)}${b ? ` <small dir="ltr">${esc(b.bc)}</small>` : ""}</span>`; }).join("")}</div>` : ""}
     <div class="pacts">${own ? `<button onclick="quickPrice('${pid}')"><i>💲</i>السعر</button>` : ""}<button onclick="document.getElementById('aq').focus()"><i>🔢</i>الكمية</button><button onclick="openLabel('${pid}')"><i>🏷️</i>ملصق السعر</button>${own ? `<button onclick="editProduct('${pid}')"><i>✏️</i>تعديل</button><button class="del" onclick="ask('تحذف «${esc(p.name).replace(/'/g, "")}» نهائياً؟',()=>delProduct('${p.id}'))"><i>🗑️</i>حذف</button>` : ""}</div>
     <div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi ${q == null ? "" : stockState(pid) === "out" ? "" : "dark"}"><small>الكمية في المحل</small><b>${q == null ? "ما هيش متبعة" : fmtQ(p, q)}</b></div>
       <div class="kpi"><small>نعلمك كي تهبط لـ</small><b>${fmtQ(p, minOf(pid))}</b></div></div>
@@ -1505,6 +1539,9 @@ function editProduct(id, preset={}) {
   const p = id ? prod(id) : null, inv = id ? S.inv[id] || {} : {};
   EP = p ? {...p} : {id: uid(), name: "", cat: "", unit: "piece", unitName: "حبة", price: "", img: "", desc: "", active: true, stock: true, ...preset};
   EP.imgs = EP.img ? [EP.img] : []; EP._extra0 = 0;
+  { const V = pVars(EP), B = (inv.bcs || []).filter(b => b && b.bc), used = new Set(); EP.vrows = [];
+    B.forEach(b => { const x = V.find(z => z.id === b.v); EP.vrows.push({vid: x ? x.id : "", name: x ? x.name : "", hex: x ? x.hex : "", bc: b.bc}); if (x) used.add(x.id); });
+    V.forEach(x => { if (!used.has(x.id)) EP.vrows.push({vid: x.id, name: x.name, hex: x.hex, bc: ""}); }); }
   const cats = [...new Set(S.products.map(x => x.cat).filter(Boolean))];
   modal(`<h2>${p ? "✏️ تعديل السلعة" : "➕ سلعة جديدة"}<button class="x" onclick="closeModal()">×</button></h2>
     <div class="imgs" id="e_prev"></div>
@@ -1521,13 +1558,16 @@ function editProduct(id, preset={}) {
     <label class="f">📅 ${id ? "زيد تاريخ انتهاء (سلعة جديدة وصلت)" : "تاريخ الانتهاء"} <small class="muted">(اختياري · يروح لـ ⏳ الصلاحية وصلاحيتي)</small></label>
     <div style="display:flex;gap:6px;align-items:center"><input class="in" type="date" id="e_exp" style="flex:1"><label class="btn ghost sm" style="width:auto;white-space:nowrap;cursor:pointer">📷 صوّر التاريخ<input type="file" accept="image/*" capture="environment" class="hidden" onchange="ocrExp(this)"></label></div>
     <div id="e_expc" class="chips" style="margin-top:6px;flex-wrap:wrap"></div>
+    <div class="vbox"><div class="vhd"><b>🎨 الألوان / الأنواع · باركودات أخرى</b><small class="muted">مثلاً عجينة سكر: كل لون باسمو وبالباركود تاعو. كي تسكانّي الباركود يطلع اللون ديريكت.</small></div>
+      <div id="e_vars"></div>
+      <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" onclick="addVRow(true)">🎨 زيد لون</button><button class="btn ghost sm" onclick="addVRow(false)">🔢 زيد باركود آخر</button></div></div>
     <label class="f">وصف قصير (يبان للزبائن)</label><textarea class="in" id="e_desc" rows="2">${esc(EP.desc)}</textarea>
     <div class="seg" style="margin-top:12px"><button id="e_stock" class="${EP.stock !== false ? "on" : ""}" onclick="EP.stock=!(EP.stock!==false);EP.autoOut=false;this.classList.toggle('on');this.textContent=EP.stock!==false?'✅ متوفرة':'⛔ نفدت'">${EP.stock !== false ? "✅ متوفرة" : "⛔ نفدت"}</button>
       <button class="${EP.active !== false ? "on" : ""}" onclick="EP.active=!(EP.active!==false);this.classList.toggle('on');this.textContent=EP.active!==false?'👁️ ظاهرة للزبائن':'🙈 مخفية'">${EP.active !== false ? "👁️ ظاهرة للزبائن" : "🙈 مخفية"}</button></div>
     <div class="err" id="e_err"></div>
     <button class="btn" id="e_save" onclick="saveProd(${id ? "true" : "false"})">💾 حفظ</button>
     ${p ? `<div style="height:8px"></div><button class="btn ghost" style="color:var(--bad)" onclick="ask('تحذف «${esc(p.name).replace(/'/g, "")}» نهائياً؟',()=>delProduct('${p.id}'))">🗑️ حذف السلعة</button>` : ""}`);
-  uSync(); drawImgs();
+  uSync(); drawImgs(); drawVRows();
   if (p) DB.get("pimgs", p.id).then(d => { if (!d || EP.id !== p.id) return; const ex = (d.imgs || []).filter(Boolean); EP._extra0 = ex.length; EP.imgs = [...EP.imgs, ...ex]; drawImgs(); }).catch(() => {});
 }
 function uSync() {
@@ -1535,6 +1575,23 @@ function uSync() {
   $("#e_unitbox").style.visibility = EP.unit === "kg" ? "hidden" : "visible";
   $("#e_plab").textContent = EP.unit === "kg" ? "سعر بيع الكيلو (دج)" : "سعر البيع (دج)";
   $("#e_clab").textContent = EP.unit === "kg" ? "سعر شراء الكيلو (دج)" : "سعر الشراء (دج)";
+}
+/* الألوان / الأنواع + باركودات أخرى */
+const VHEX = ["#E53935", "#1E88E5", "#43A047", "#FDD835", "#8E24AA", "#FB8C00", "#EC407A", "#6D4C41", "#212121", "#FAFAFA", "#00ACC1", "#C0CA33"];
+function drawVRows() {
+  const b = $("#e_vars"); if (!b) return; const R = EP.vrows || [];
+  b.innerHTML = R.length ? R.map((r, i) => `<div class="vrow ${r.isVar === false || (!r.name && r.isVar !== true) ? "nov" : ""}">
+      ${r.isVar === false || (!r.name && r.isVar !== true) ? `<span class="vlab">🔢 نفس السلعة</span>` : `<input type="color" class="vcol" value="${esc(r.hex || "#cccccc")}" onchange="EP.vrows[${i}].hex=this.value"><input class="in vname" placeholder="اللون (مثلاً: أحمر)" value="${esc(r.name)}" oninput="EP.vrows[${i}].name=this.value">`}
+      <input class="in vbc" dir="ltr" inputmode="numeric" placeholder="الباركود" value="${esc(r.bc)}" oninput="EP.vrows[${i}].bc=this.value.trim()">
+      <button class="mini" onclick="scanBarcode(c=>{EP.vrows[${i}].bc=c;drawVRows()})">📷</button><button class="mini red" onclick="EP.vrows.splice(${i},1);drawVRows()">×</button></div>`).join("")
+    : `<p class="muted" style="font-size:13px;margin:6px 2px">ما كاين حتى لون. إذا السلعة كاين منها بزاف ألوان، اضغط «🎨 زيد لون».</p>`;
+}
+function addVRow(isVar) { (EP.vrows = EP.vrows || []).push({vid: "", name: "", hex: isVar ? VHEX[EP.vrows.filter(r => r.name || r.isVar).length % VHEX.length] : "", bc: "", isVar}); drawVRows(); const L = $$("#e_vars .vrow"); const r = L[L.length - 1]; r && (r.querySelector(isVar ? ".vname" : ".vbc") || {}).focus && r.querySelector(isVar ? ".vname" : ".vbc").focus(); }
+function collectVars() {
+  const R = (EP.vrows || []).map(r => ({...r, name: (r.name || "").trim(), bc: (r.bc || "").trim()})), variants = [], bcs = [];
+  for (const r of R) { if (!r.name) continue; let x = variants.find(z => z.name === r.name); if (!x) { x = {id: r.vid || "v" + Math.random().toString(36).slice(2, 9), name: r.name, hex: r.hex || ""}; variants.push(x); } r.vid = x.id; }
+  for (const r of R) if (r.bc && !bcs.some(b => b.bc === r.bc)) bcs.push({bc: r.bc, v: r.name ? r.vid : ""});
+  return {variants, bcs};
 }
 /* الصور: الأولى هي الرئيسية (تبان في القائمة والكاسة)، والباقي يبانو للزبون كي يحل السلعة */
 const IMG_MAX = 6;
@@ -1562,13 +1619,16 @@ async function saveProd(isEdit) {
   EP.unitName = EP.unit === "kg" ? "" : ($("#e_unit").value.trim() || "حبة"); EP.desc = $("#e_desc").value.trim();
   if (!EP.name) return $("#e_err").textContent = "اكتب اسم السلعة";
   if (!(EP.price > 0)) return $("#e_err").textContent = "اكتب سعر البيع";
-  const bc = $("#e_bc").value.trim();
-  if (bc && EP._bcOk !== bc) { const dup = Object.keys(S.inv).find(k => k !== EP.id && S.inv[k].barcode === bc); if (dup && prod(dup)) { $("#e_err").innerHTML = `⚠️ هاد الباركود مسجّل حتى لـ «${esc(prod(dup).name)}». إذا هوما سلعتين عندهم نفس الباركود (كيما أذواق الدادة):<br><button class="btn ghost sm" style="margin-top:8px" onclick="EP._bcOk='${esc(bc)}';saveProd(${isEdit ? "true" : "false"})">✅ إيه، خلّي نفس الباركود · حفظ</button>`; return; } }
+  const bc = $("#e_bc").value.trim(), VB = collectVars();
+  if (VB.bcs.some(b => b.bc === bc)) return $("#e_err").textContent = "الباركود الرئيسي مكتوب حتى في الألوان — نحّيه من وحدة";
+  if (EP._bcOk !== "all") { const other = [bc, ...VB.bcs.map(b => b.bc)].filter(Boolean).map(c => bcHits(c).find(h => h.pid !== EP.id)).find(Boolean);
+    if (other) { $("#e_err").innerHTML = `⚠️ باركود مسجّل حتى لـ «${esc(prod(other.pid).name)}». إذا هوما سلعتين عندهم نفس الباركود:<br><button class="btn ghost sm" style="margin-top:8px" onclick="EP._bcOk='all';saveProd(${isEdit ? "true" : "false"})">✅ إيه، خلّي نفس الباركود · حفظ</button>`; return; } }
+  EP.variants = VB.variants;
   EP.ts = EP.ts || Date.now();
   EP.img = EP.imgs && EP.imgs[0] ? await shrinkImg(EP.imgs[0], 640, 0.72) : "";
   const extra = (EP.imgs || []).slice(1);
-  const {id, imgs: _i, _bcOk: _b, _extra0: _e, ...d} = EP, ops = [{t: "set", c: "products", id, d}];
-  const minS = $("#e_min").value.trim(), invD = {barcode: bc, min: minS === "" ? null : num(minS), updatedAt: Date.now()};
+  const {id, imgs: _i, _bcOk: _b, _extra0: _e, vrows: _v, ...d} = EP, ops = [{t: "set", c: "products", id, d}];
+  const minS = $("#e_min").value.trim(), invD = {barcode: bc, bcs: VB.bcs, min: minS === "" ? null : num(minS), updatedAt: Date.now()};
   const costS = $("#e_cost").value.trim(); if (costS !== "") ops.push({t: "set", c: "costs", id, d: {cost: num(costS), ts: Date.now()}, merge: true});
   const qEl = $("#e_qty"), qS = qEl ? qEl.value.trim() : "";
   $("#e_save").disabled = true;
@@ -1581,7 +1641,7 @@ async function saveProd(isEdit) {
     if (num(qS) <= 0) d.stock = false;
   } else ops.push({t: "set", c: "inv", id, d: S.inv[id] ? invD : invD.barcode || invD.min != null ? {...invD} : invD, merge: true});
   // إذا ما كتبش الكمية وما كانش متبعة: ما نديروش inv بكمية (يبقى «ما هيش متبعة»)
-  if (qS === "" && !S.inv[id] && !invD.barcode && invD.min == null) ops.splice(ops.findIndex(o => o.c === "inv"), 1);
+  if (qS === "" && !S.inv[id] && !invD.barcode && !VB.bcs.length && invD.min == null) ops.splice(ops.findIndex(o => o.c === "inv"), 1);
   const expEl = $("#e_exp"), exp = expEl ? expEl.value : "";
   if (/^\d{4}-\d\d-\d\d$/.test(exp)) ops.push({t: "set", c: "batches", id: uid(), d: {pid: id, name: EP.name, barcode: bc, exp, qty: qS, alerts: [30, 7, 1], note: "", done: false, created: Date.now(), ts: Date.now(), by: S.me.name}});
   try { await commitFast(ops, "product"); closeModal(); toast(exp ? "✅ تحفظت السلعة + تاريخ الانتهاء" : "✅ تحفظت السلعة");
@@ -1641,7 +1701,7 @@ function openBatch(id, preset={}) {
     ${b ? `<div style="height:8px"></div><div class="grid2"><button class="btn green" onclick="batchDone('${b.id}')">✔️ تباعت / تنحات</button><button class="btn ghost" style="color:var(--bad)" onclick="ask('تحذفها؟',()=>DB.remove('batches','${b.id}').then(()=>toast('🗑️ تحذفت')))">🗑️ حذف</button></div>` : ""}`);
 }
 function bLink() { const v = $("#b_name").value.trim(), p = S.products.find(x => x.name === v); EB.pid = p ? p.id : ""; if (p && S.inv[p.id] && S.inv[p.id].barcode) EB.barcode = S.inv[p.id].barcode; }
-function bScan(code) { EB.barcode = code; const id = bcList(code).length > 1 ? null : Object.keys(S.inv).find(k => S.inv[k].barcode === code); if (bcList(code).length > 1) { EB.pid = null; return toast("⚠️ هاد الباركود عندو " + bcList(code).length + " سلع (" + bcList(code).map(i => prod(i).name).join("، ") + ") — اكتب الاسم واختار", 5000); } if (id && prod(id)) { EB.pid = id; $("#b_name").value = prod(id).name; toast("✅ " + prod(id).name); } else toast("باركود: " + code + " — اكتب الاسم"); }
+function bScan(code) { EB.barcode = code; const id = bcList(code).length > 1 ? null : bcList(code)[0]; if (bcList(code).length > 1) { EB.pid = null; return toast("⚠️ هاد الباركود عندو " + bcList(code).length + " سلع (" + bcList(code).map(i => prod(i).name).join("، ") + ") — اكتب الاسم واختار", 5000); } if (id && prod(id)) { EB.pid = id; $("#b_name").value = prod(id).name; toast("✅ " + prod(id).name); } else toast("باركود: " + code + " — اكتب الاسم"); }
 function bAlert(n, el) { const i = EB.alerts.indexOf(n); if (i >= 0) EB.alerts.splice(i, 1); else EB.alerts.push(n); EB.alerts.sort((a, b) => b - a); el.classList.toggle("on"); }
 async function saveBatch() {
   EB.name = $("#b_name").value.trim(); EB.exp = $("#b_exp").value; EB.qty = $("#b_qty").value.trim(); EB.note = $("#b_note").value.trim(); bLink();
@@ -2726,9 +2786,15 @@ function newShopBarcode() {
 }
 const LBL_SIZES = [["auto", "حسب الطابعة"], ["40x20", "40×20"], ["40x30", "40×30"], ["50x25", "50×25"], ["50x30", "50×30"], ["60x40", "60×40"]];
 const lblCfg = () => Object.assign({size: "auto", mode: "full"}, ls("lp_lbl") || {});
-function labelItem(pid) {
-  const p = prod(pid), inv = S.inv[pid] || {};
-  return {name: p.name, bc: inv.barcode || "", price: +p.price || 0, unit: isKg(p) ? "/kg" : ""};
+function labelItem(pid, v) {
+  const p = prod(pid), inv = S.inv[pid] || {}, vn = varName(p, v), vb = v && (inv.bcs || []).find(b => b.v === v);
+  return {name: vn ? `${p.name} · ${vn}` : p.name, bc: v ? (vb ? vb.bc : "") : inv.barcode || "", price: +p.price || 0, unit: isKg(p) ? "/kg" : ""};
+}
+// العناصر اللي نطبعو: لون واحد ولا كل الألوان
+function lblItems(pid, n) {
+  const p = prod(pid), V = pVars(p), sel = S.ui.lblV || "";
+  if (sel === "*" && V.length) return V.map(x => ({...labelItem(pid, x.id), n}));
+  return [{...labelItem(pid, sel), n}];
 }
 // نفس الشكل في المعاينة والطباعة: القياسات بـ cqh/cqw (نسبة للملصق)
 const LBL_CSS = `.lb{container-type:size;box-sizing:border-box;padding:3cqh 3cqw 2.5cqh;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:1cqh;overflow:hidden;font-family:Tahoma,Arial,sans-serif;color:#000;background:#fff;text-align:center}
@@ -2741,13 +2807,16 @@ function labelHTML(it, mode, shop) {
   return `<div class="lb ${po ? "po" : ""}"><div class="s">${esc(shop || "")}</div><div class="n">${esc(it.name)}</div>${po ? "" : `<div class="b">${c128svg(it.bc)}</div><div class="d">${esc(it.bc)}</div>`}<div class="p">${price} DA${it.unit ? `<small style="font-size:.5em"> ${it.unit}</small>` : ""}</div></div>`;
 }
 function openLabel(pid) {
-  const p = prod(pid); if (!p) return; const c = lblCfg(), it = labelItem(pid), q = qtyOf(pid);
+  const p = prod(pid); if (!p) return; const c = lblCfg(), q = qtyOf(pid), V = pVars(p);
+  if (S.ui.lblPid !== pid) S.ui.lblV = V.length ? V[0].id : "";
   S.ui.lblPid = pid; S.ui.lblN = S.ui.lblN || 1;
+  const it = labelItem(pid, S.ui.lblV === "*" ? (V[0] || {}).id : S.ui.lblV);
   const [w, h] = (c.size === "auto" ? "50x25" : c.size).split("x").map(Number);
   modal(`<h2>🏷️ ملصق السعر<button class="x" onclick="closeModal()">×</button></h2>
     <style>${LBL_CSS}.lbprev{display:flex;justify-content:center;padding:14px;background:var(--soft);border-radius:16px}.lbprev .lb{width:${w * 5.6}px;height:${h * 5.6}px;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.15)}</style>
     <div class="lbprev">${labelHTML(it, c.mode, SHOP.name)}</div>
-    ${it.bc ? "" : `<div class="note warn" style="margin-top:10px">هاد السلعة ما عندهاش باركود. <button class="mini" onclick="genBarcode('${pid}')">🔢 دير باركود جديد</button></div>`}
+    ${it.bc ? "" : `<div class="note warn" style="margin-top:10px">${S.ui.lblV && S.ui.lblV !== "*" ? "هاد اللون ما عندوش باركود (زيدو في «تعديل»)." : `هاد السلعة ما عندهاش باركود. <button class="mini" onclick="genBarcode('${pid}')">🔢 دير باركود جديد</button>`}</div>`}
+    ${V.length ? `<label class="f">🎨 أي لون؟</label><div class="chips" style="flex-wrap:wrap">${V.map(x => `<button class="chip ${S.ui.lblV === x.id ? "on" : ""}" onclick="S.ui.lblV='${x.id}';setLbl({})">${sw(x.hex)} ${esc(x.name)}</button>`).join("")}<button class="chip ${S.ui.lblV === "*" ? "on" : ""}" onclick="S.ui.lblV='*';setLbl({})">🎨 كل الألوان (${V.length})</button></div>` : ""}
     <label class="f">واش تطبع؟</label>
     <div class="seg"><button class="${c.mode !== "price" ? "on" : ""}" onclick="setLbl({mode:'full'})">🔢 الباركود + السعر</button><button class="${c.mode === "price" ? "on" : ""}" onclick="setLbl({mode:'price'})">💲 السعر برك</button></div>
     <label class="f">شحال من ملصق؟</label>
@@ -2755,7 +2824,7 @@ function openLabel(pid) {
       ${[1, 5, 10].map(n => `<button class="chip" onclick="$('#lb_n').value=${n}">${n}</button>`).join("")}${q > 0 && !isKg(p) ? `<button class="chip" onclick="$('#lb_n').value=${Math.min(200, Math.round(q))}">كيما المخزون (${Math.round(q)})</button>` : ""}</div>
     <label class="f">قياس الملصق (مم)</label>
     <div class="chips" style="flex-wrap:wrap">${LBL_SIZES.map(([k, l]) => `<button class="chip ${c.size === k ? "on" : ""}" onclick="setLbl({size:'${k}'})">${l}</button>`).join("")}</div>
-    <div style="height:14px"></div><div id="lbst"></div><button class="btn dark" onclick="printLabels([{...labelItem('${pid}'),n:num($('#lb_n').value)||1}])">🖨️ ${IS_WIN ? "اطبع في طابعة الملصقات" : "اطبع في طابعة المحل"}</button>`);
+    <div style="height:14px"></div><div id="lbst"></div><button class="btn dark" onclick="printLabels(lblItems('${pid}',num($('#lb_n').value)||1))">🖨️ ${IS_WIN ? "اطبع في طابعة الملصقات" : "اطبع في طابعة المحل"}</button>`);
   lblStatus();
 }
 function setLbl(o) { S.ui.lblN = num(($("#lb_n") || {}).value) || S.ui.lblN; ls("lp_lbl", Object.assign(lblCfg(), o)); openLabel(S.ui.lblPid); }
