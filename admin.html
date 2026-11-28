@@ -453,7 +453,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.7.1";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1139,6 +1139,18 @@ VIEWS.pos = {
   after() { if ($("#pd")) { drawPD(); posFocus(); return; } this.draw(); },
   draw() { if ($("#pd")) return drawPD(); drawGrid("#pgrid", "#pchips"); drawCart(); if (document.activeElement && document.activeElement.id === "pq") posSuggest(); }
 };
+/* باركود واحد لعدة سلع (كيما أذواق نفس المنتوج): نسقسيو أي وحدة */
+const bcList = code => Object.keys(S.inv).filter(k => code && S.inv[k].barcode === code && prod(k));
+function pickByBarcode(code, cb, none) {
+  const L = bcList(code);
+  if (!L.length) return none ? none() : toast("ما لقيتش: " + code, 2500);
+  if (L.length === 1) return cb(L[0]);
+  modal(`<h2>🔢 هاد الباركود عندو ${L.length} سلع — أي وحدة؟<button class="x" onclick="closeModal();posFocus&&posFocus()">×</button></h2>
+    <div class="list" id="bcpick">${L.map((id, i) => { const p = prod(id); return `<div class="it" onclick="closeModal();BCPICK('${id}')"><div class="th" style="font-weight:900">${i + 1}</div>${thumb(p)}<div class="t"><b>${esc(p.name)}</b><small>${fmt(p.price)}</small></div></div>`; }).join("")}</div>
+    <p class="muted" style="font-size:13px;margin:8px 2px 0">⌨️ تقدر تضغط الرقم ${L.length <= 9 ? `(1 — ${L.length})` : ""}</p>`);
+  window.BCPICK = id => { window.BCPICK = null; cb(id); };
+}
+document.addEventListener("keydown", e => { const b = $("#bcpick"); if (!b || !/^[1-9]$/.test(e.key)) return; const it = b.children[+e.key - 1]; if (it) { e.preventDefault(); e.stopPropagation(); it.click(); } }, true);
 /* اقتراحات وانت تكتب */
 function posMatches(q) {
   q = (q || "").trim().toLowerCase(); if (!q) return [];
@@ -1164,16 +1176,14 @@ function posKey(e) {
   if (e.key !== "Enter") return;
   e.preventDefault();
   const v = e.target.value.trim(); if (!v) { if (S.cart.length) payCash(); return; }
-  const id = Object.keys(S.inv).find(k => S.inv[k].barcode === v);
-  if (id && prod(id)) return posPick(id);
+  if (bcList(v).length) { e.target.value = ""; S.ui.pq = ""; posSuggest(); return pickByBarcode(v, id => { posPick(id); posFocus && posFocus(); }); }
   // رقم صغير (حتى 7 أرقام) + Enter = منتج متنوع بهاد السعر (كيما سهلها)
   if (/^\d{1,7}([.,]\d{1,2})?$/.test(v) && num(v) > 0 && !(S.ui.si > 0)) { addDivers(num(v)); e.target.value = ""; S.ui.pq = ""; posSuggest(); return; }
   if (list.length) return posPick(list[Math.min(S.ui.si || 0, list.length - 1)].id);
   posCode(v); e.target.value = ""; S.ui.pq = ""; posSuggest();
 }
 function posCode(code) {
-  const id = Object.keys(S.inv).find(k => S.inv[k].barcode === code);
-  if (id && prod(id)) { posAdd(id); toast("✅ " + prod(id).name, 1200); }
+  if (bcList(code).length) pickByBarcode(code, id => { posAdd(id); toast("✅ " + prod(id).name, 1200); posFocus && posFocus(); });
   else { toast("ما لقيتش هاد الباركود: " + code, 3000); if (isOwner()) ask(`الباركود <bdi>${esc(code)}</bdi> ما هوش مسجّل. تحب تزيد سلعة جديدة بيه؟`, () => editProduct(null, {barcode: code}), "➕ زيد", false); }
 }
 /* شبكة السلع */
@@ -1414,7 +1424,7 @@ VIEWS.stock = {
     const val = isOwner() ? Object.entries(S.inv).reduce((a, [pid, i]) => a + Math.max(0, +i.qty || 0) * costOf(pid), 0) : 0;
     return `<div class="ptitle"><h1>📦 المنتجات</h1>${isOwner() ? `<button class="btn sm" onclick="editProduct()">➕ سلعة جديدة</button>` : ""}</div>
       ${isOwner() ? `<div class="kpis"><div class="kpi dark"><small>عدد السلع</small><b><bdi>${S.products.length}</bdi></b></div><div class="kpi"><small>قيمة المخزون (شراء)</small><b>${fmt(val)}</b></div></div>` : ""}
-      <div class="search"><span>🔍</span><input id="sq" placeholder="ابحث بالاسم ولا الباركود..." value="${esc(S.ui.sq || "")}" oninput="S.ui.sq=this.value;VIEWS.stock.draw()"><button onclick="scanBarcode(c=>{const id=Object.keys(S.inv).find(k=>S.inv[k].barcode===c);if(id)openStock(id);else toast('ما لقيتش: '+c)})">📷</button></div>
+      <div class="search"><span>🔍</span><input id="sq" placeholder="ابحث بالاسم ولا الباركود..." value="${esc(S.ui.sq || "")}" oninput="S.ui.sq=this.value;VIEWS.stock.draw()"><button onclick="scanBarcode(c=>pickByBarcode(c,openStock))">📷</button></div>
       <div class="chips">${F.map(([k, l, n]) => `<button class="chip ${S.ui.sf === k ? "on" : ""}" onclick="S.ui.sf='${k}';renderPage()">${l}<span class="n">${n}</span></button>`).join("")}</div>
       <div class="list" id="slist"></div>`;
   },
@@ -1470,7 +1480,7 @@ async function saveAdjust(pid) {
 async function saveStockMeta(pid) {
   const d = {barcode: $("#abc").value.trim(), updatedAt: Date.now()};
   const m = $("#amin").value.trim(); d.min = m === "" ? null : num(m);
-  if (d.barcode) { const dup = Object.keys(S.inv).find(k => k !== pid && S.inv[k].barcode === d.barcode); if (dup && prod(dup)) return toast("هاد الباركود مسجّل لـ: " + prod(dup).name, 3500); }
+  if (d.barcode && S.ui.bcOk !== d.barcode) { const dup = Object.keys(S.inv).find(k => k !== pid && S.inv[k].barcode === d.barcode); if (dup && prod(dup)) { const keep = {aq: $("#abc").value, min: $("#amin").value, cost: ($("#acost") || {}).value}; return ask(`⚠️ هاد الباركود مسجّل حتى لـ «${esc(prod(dup).name)}».<br><small class="muted">إذا هوما سلعتين عندهم نفس الباركود (كيما أذواق الدادة)، خليه: كي تسكانّي يسقسيك أي وحدة.</small>`, () => { S.ui.bcOk = d.barcode; openStock(pid).then(() => { $("#abc").value = keep.aq; $("#amin").value = keep.min; if ($("#acost") && keep.cost != null) $("#acost").value = keep.cost; saveStockMeta(pid); }); }, "✅ إيه، خليه لزوج", false); } }
   const ops = [{t: "set", c: "inv", id: pid, d, merge: true}];
   if ($("#acost")) ops.push({t: "set", c: "costs", id: pid, d: {cost: num($("#acost").value), ts: Date.now()}, merge: true});
   await commitFast(ops, "meta"); toast("✅ تحفظت"); closeModal();
@@ -1527,7 +1537,7 @@ async function saveProd(isEdit) {
   if (!EP.name) return $("#e_err").textContent = "اكتب اسم السلعة";
   if (!(EP.price > 0)) return $("#e_err").textContent = "اكتب سعر البيع";
   const bc = $("#e_bc").value.trim();
-  if (bc) { const dup = Object.keys(S.inv).find(k => k !== EP.id && S.inv[k].barcode === bc); if (dup && prod(dup)) return $("#e_err").textContent = "هاد الباركود مسجّل لـ: " + prod(dup).name; }
+  if (bc && EP._bcOk !== bc) { const dup = Object.keys(S.inv).find(k => k !== EP.id && S.inv[k].barcode === bc); if (dup && prod(dup)) { $("#e_err").innerHTML = `⚠️ هاد الباركود مسجّل حتى لـ «${esc(prod(dup).name)}». إذا هوما سلعتين عندهم نفس الباركود (كيما أذواق الدادة):<br><button class="btn ghost sm" style="margin-top:8px" onclick="EP._bcOk='${esc(bc)}';saveProd(${isEdit ? "true" : "false"})">✅ إيه، خلّي نفس الباركود · حفظ</button>`; return; } }
   EP.ts = EP.ts || Date.now();
   const {id, ...d} = EP, ops = [{t: "set", c: "products", id, d}];
   const minS = $("#e_min").value.trim(), invD = {barcode: bc, min: minS === "" ? null : num(minS), updatedAt: Date.now()};
@@ -1602,7 +1612,7 @@ function openBatch(id, preset={}) {
     ${b ? `<div style="height:8px"></div><div class="grid2"><button class="btn green" onclick="batchDone('${b.id}')">✔️ تباعت / تنحات</button><button class="btn ghost" style="color:var(--bad)" onclick="ask('تحذفها؟',()=>DB.remove('batches','${b.id}').then(()=>toast('🗑️ تحذفت')))">🗑️ حذف</button></div>` : ""}`);
 }
 function bLink() { const v = $("#b_name").value.trim(), p = S.products.find(x => x.name === v); EB.pid = p ? p.id : ""; if (p && S.inv[p.id] && S.inv[p.id].barcode) EB.barcode = S.inv[p.id].barcode; }
-function bScan(code) { EB.barcode = code; const id = Object.keys(S.inv).find(k => S.inv[k].barcode === code); if (id && prod(id)) { EB.pid = id; $("#b_name").value = prod(id).name; toast("✅ " + prod(id).name); } else toast("باركود: " + code + " — اكتب الاسم"); }
+function bScan(code) { EB.barcode = code; const id = bcList(code).length > 1 ? null : Object.keys(S.inv).find(k => S.inv[k].barcode === code); if (bcList(code).length > 1) { EB.pid = null; return toast("⚠️ هاد الباركود عندو " + bcList(code).length + " سلع (" + bcList(code).map(i => prod(i).name).join("، ") + ") — اكتب الاسم واختار", 5000); } if (id && prod(id)) { EB.pid = id; $("#b_name").value = prod(id).name; toast("✅ " + prod(id).name); } else toast("باركود: " + code + " — اكتب الاسم"); }
 function bAlert(n, el) { const i = EB.alerts.indexOf(n); if (i >= 0) EB.alerts.splice(i, 1); else EB.alerts.push(n); EB.alerts.sort((a, b) => b - a); el.classList.toggle("on"); }
 async function saveBatch() {
   EB.name = $("#b_name").value.trim(); EB.exp = $("#b_exp").value; EB.qty = $("#b_qty").value.trim(); EB.note = $("#b_note").value.trim(); bLink();
