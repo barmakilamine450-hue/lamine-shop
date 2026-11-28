@@ -175,6 +175,9 @@ footer a{color:var(--brand-d);font-weight:700;text-decoration:none}
 .vch{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 6px}.vch button{display:inline-flex;align-items:center;gap:8px;border:2px solid #EADBCD;background:#fff;border-radius:14px;padding:8px 12px;font:inherit;font-weight:800;font-size:14.5px;cursor:pointer}
 .vch button i{width:20px;height:20px;border-radius:50%;border:2px solid rgba(0,0,0,.12)}.vch button.on{border-color:#E8721C;background:#FFF1E2}
 .vch.shake{animation:vsh .5s}@keyframes vsh{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.wtabs{display:flex;gap:6px;margin:10px 0 8px}.wtabs button{flex:1;border:2px solid #EADBCD;background:#fff;border-radius:12px;padding:9px;font:inherit;font-weight:800;font-size:14px;cursor:pointer}.wtabs button.on{border-color:#E8721C;background:#FFF1E2}
+.wres{min-height:22px;margin:8px 2px 0;font-size:15.5px;color:#17935A}.wres b{color:#3B1F14}.whint{font-size:12.5px;color:var(--muted);margin:4px 2px 0}
+.vch.sz button{min-width:58px;justify-content:center}.vch.sz button i{display:none}
 </style>
 </head>
 <body>
@@ -340,16 +343,16 @@ let pick={};
 const vars=p=>((p&&p.variants)||[]).filter(x=>x&&x.name);
 function openProduct(id){
   const p=S.products.find(x=>x.id===id); if(!p) return;
-  pick={p, grams:SHOP.ratlGrams<1000?1000:1000, qty:1, custom:"", v:""};
+  pick={p, grams:SHOP.ratlGrams<1000?1000:1000, qty:1, custom:"", money:"", mode:"g", v:"", c:""};
   modal(`<h2>${esc(p.name)}<button class="x" onclick="closeModal()">×</button></h2>
     ${p.img?`<div class="pgal" id="pgal"><img src="${p.img}"></div><div class="pdots" id="pdots"></div>`:""}
     ${p.desc?`<p style="color:var(--muted);margin:4px 0 8px">${esc(p.desc)}</p>`:""}
     <div class="price" style="font-size:20px">${priceLabel(p)}</div>
-    ${vars(p).length?`<label class="f">🎨 اختار اللون / النوع</label><div class="vch" id="vch">${vars(p).map(x=>`<button data-v="${esc(x.id)}" onclick="pick.v=this.dataset.v;[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this))"><i style="background:${esc(x.hex||"#ccc")}"></i>${esc(x.name)}</button>`).join("")}</div>`:""}
+    ${vars(p).length?`<div id="vbox"></div>`:""}
     <div id="qbox"></div>
     <div class="total"><span>المجموع</span><span id="ptot"></span></div>
     <button class="btn" onclick="addToCart()">أضف للسلة</button>`);
-  renderQ();
+  renderQ(); if(vars(p).length) renderV();
   if(p.img&&DB.getImgs) DB.getImgs(p.id).then(ex=>{const g=$("#pgal");if(!g||!ex.length)return;g.insertAdjacentHTML("beforeend",ex.map(u=>`<img src="${u}" loading="lazy">`).join(""));
     const n=ex.length+1,d=$("#pdots");d.innerHTML=Array.from({length:n},(_,i)=>`<i class="${i?"":"on"}"></i>`).join("");
     g.onscroll=()=>{const k=Math.round(Math.abs(g.scrollLeft)/g.clientWidth);[...d.children].forEach((x,j)=>x.classList.toggle("on",j===k))};});
@@ -357,17 +360,37 @@ function openProduct(id){
 function renderQ(){
   const p=pick.p, box=$("#qbox");
   if(p.unit==="kg"){
-    box.innerHTML=`<label class="f">شحال تحتاج؟</label><div class="qopts">${weightOptions().map(o=>`<button class="qopt ${pick.grams===o.g&&!pick.custom?"on":""}" onclick="pick.grams=${o.g};pick.custom='';renderQ()">${o.l}</button>`).join("")}</div>
-      <label class="f">ولا اكتب الوزن بالغرام</label><input class="in" inputmode="numeric" placeholder="مثلاً 750" value="${esc(pick.custom)}" oninput="pick.custom=this.value.replace(/\\D/g,'');pick.grams=+pick.custom||0;updT()">`;
+    const m=pick.mode||"g";
+    box.innerHTML=`<label class="f">شحال تحتاج؟</label><div class="qopts">${weightOptions().map(o=>`<button class="qopt ${pick.grams===o.g&&!pick.custom&&!pick.money?"on":""}" data-g="${o.g}" onclick="pick.grams=${o.g};pick.custom='';pick.money='';renderQ()">${o.l}</button>`).join("")}</div>
+      <div class="wtabs"><button class="${m==="g"?"on":""}" onclick="pick.mode='g';renderQ()">⚖️ نكتب الوزن</button><button class="${m==="m"?"on":""}" onclick="pick.mode='m';renderQ()">💰 نكتب الدراهم</button></div>
+      ${m==="g"?`<input class="in" id="wq" inputmode="numeric" placeholder="الوزن بالغرام — مثلاً 10" value="${esc(pick.custom)}" oninput="pick.custom=this.value.replace(/\D/g,'');pick.money='';pick.grams=+pick.custom||0;updT()">`
+        :`<input class="in" id="wq" inputmode="numeric" placeholder="شحال تحب تخلّص (دج) — مثلاً 150" value="${esc(pick.money)}" oninput="pick.money=this.value.replace(/\D/g,'');pick.custom='';pick.grams=Math.round((+pick.money||0)/pick.p.price*1000);updT()">`}
+      <div class="wres" id="wres"></div><div class="whint">💡 100 غ = ${fmtDA(p.price/10)} دج · 1 غ = ${fmtDA(p.price/1000)} دج</div>`;
   } else {
     box.innerHTML=`<label class="f">الكمية</label><div class="stepper"><button onclick="pick.qty=Math.max(1,pick.qty-1);renderQ()">−</button><input inputmode="numeric" value="${pick.qty}" oninput="pick.qty=Math.max(1,parseInt(this.value)||1);updT()"><button onclick="pick.qty++;renderQ()">+</button><span style="color:var(--muted)">${esc(p.unitName||"حبة")}</span></div>`;
   }
   updT();
 }
-function updT(){const p=pick.p;const t=p.unit==="kg"?p.price*pick.grams/1000:p.price*pick.qty;$("#ptot").textContent=fmt(t)}
+const gLabel=g=>g>=1000?(Math.round(g/10)/100).toString().replace(".",",")+" كغ":Math.round(g)+" غ";
+function updT(){const p=pick.p;const t=p.unit==="kg"?p.price*pick.grams/1000:p.price*pick.qty;$("#ptot").textContent=p.unit==="kg"&&t<100?fmtDA(t)+" دج":fmt(t);
+  document.querySelectorAll(".qopt").forEach(b=>b.classList.toggle("on",!pick.custom&&!pick.money&&+b.dataset.g===pick.grams));
+  const r=$("#wres");if(r){if(pick.money&&+pick.money>0)r.innerHTML=`✅ بـ <b>${fmtN(pick.money)} دج</b> تجيك <b>${gLabel(pick.grams)}</b>`;else if(pick.custom&&+pick.custom>0)r.innerHTML=`✅ <b>${gLabel(+pick.custom)}</b> = <b>${fmtDA(t)} دج</b>`;else r.innerHTML=""}}
+// الأنواع: إذا الأسماء «لون · رقم» نختارو اللون من بعد الرقم
+function renderV(){
+  const p=pick.p,V=vars(p),box=$("#vbox");if(!box)return;
+  const two=V.length>1&&V.every(x=>x.name.includes(" · "));
+  const chip=(x,lbl)=>`<button class="${pick.v===x.id?"on":""}" onclick="pick.v='${esc(x.id)}';renderV()"><i style="background:${esc(x.hex||"#ccc")}"></i>${esc(lbl)}</button>`;
+  if(!two){box.innerHTML=`<label class="f">🎨 اختار اللون / النوع</label><div class="vch" id="vch">${V.map(x=>chip(x,x.name)).join("")}</div>`;return}
+  const head=x=>x.name.split(" · ")[0].trim(), tail=x=>x.name.split(" · ").slice(1).join(" · ").trim();
+  const groups=[...new Set(V.map(head))]; if(pick.v){const x=V.find(z=>z.id===pick.v);if(x)pick.c=head(x)}
+  const sub=V.filter(x=>head(x)===pick.c);
+  if(pick.c&&sub.length===1&&pick.v!==sub[0].id){pick.v=sub[0].id}
+  box.innerHTML=`<label class="f">🎨 اختار اللون</label><div class="vch" id="vch">${groups.map(g=>{const x=V.find(z=>head(z)===g);return `<button class="${pick.c===g?"on":""}" onclick="pick.c=${esc(JSON.stringify(g))};pick.v='';renderV()"><i style="background:${esc(x.hex||"#ccc")}"></i>${esc(g)}</button>`}).join("")}</div>
+    ${pick.c?`<label class="f">📏 اختار ${/رقم/.test(tail(sub[0]||{name:""}))?"الرقم":"النوع"}</label><div class="vch sz">${sub.map(x=>chip(x,tail(x))).join("")}</div>`:""}`;
+}
 function addToCart(){
   const p=pick.p;
-  if(p.unit==="kg"&&(!pick.grams||pick.grams<50)){toast("اختار الوزن");return}
+  if(p.unit==="kg"&&(!pick.grams||pick.grams<5)){toast(pick.money?"الدراهم قلال بزاف":"اختار الوزن");return}
   if(vars(p).length&&!pick.v){toast("🎨 اختار اللون / النوع");const v=$("#vch");v&&v.classList.add("shake");setTimeout(()=>v&&v.classList.remove("shake"),600);return}
   const vx=vars(p).find(x=>x.id===pick.v);
   const it={pid:p.id,vid:vx?vx.id:"",name:vx?`${p.name} · ${vx.name}`:p.name,img:p.img?p.img:"",unit:p.unit,unitName:p.unitName||"",price:p.price,grams:p.unit==="kg"?pick.grams:0,qty:p.unit==="kg"?1:pick.qty};
