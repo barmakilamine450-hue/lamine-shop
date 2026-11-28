@@ -489,7 +489,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.8.1";
+const APP_VERSION = "1.8.2";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -1200,7 +1200,7 @@ function pickByBarcode(code, cb, none) {
 // السلعة عندها ألوان: نسقسيو أي لون
 function chooseVariant(p) {
   const V = pVars(p);
-  modal(`<h2>🎨 ${esc(p.name)} — أي لون؟<button class="x" onclick="closeModal();posFocus&&posFocus()">×</button></h2>
+  modal(`<h2>🎨 ${esc(p.name)} — أي لون / نوع؟<button class="x" onclick="closeModal();posFocus&&posFocus()">×</button></h2>
     <div class="list" id="bcpick">${V.map((x, i) => `<div class="it" onclick="closeModal();posAdd('${p.id}','${x.id}');posFocus&&posFocus()"><div class="th" style="font-weight:900">${i + 1}</div><div class="th">${sw(x.hex)}</div><div class="t"><b>${esc(x.name)}</b><small>${fmt(p.price)}</small></div></div>`).join("")}</div>
     <p class="muted" style="font-size:13px;margin:8px 2px 0">⌨️ تقدر تضغط الرقم · ولا سكانّي الباركود تاع اللون ديريكت</p>`);
 }
@@ -1262,7 +1262,8 @@ function updBrowse() { const d = $("#bdone"); if (d) d.innerHTML = `✔️ رج�
 function takeMult() { const v = S.ui.mult; S.ui.mult = ""; const n = num(v); return v && n > 0 ? n : null; }
 function posAdd(pid, v) {
   const p = prod(pid); if (!p) return;
-  if (!isKg(p) && v === undefined && pVars(p).length) return chooseVariant(p);
+  if (v === undefined && pVars(p).length) return chooseVariant(p);
+  S.ui.wv = v || "";
   if (stockState(pid) === "out") toast("⚠️ هاد السلعة مكتوبة «نفدت» في المخزون");
   const m = takeMult();
   if (isKg(p)) { if (m == null) return askWeight(p); return setWeight(pid, m >= 20 ? m / 1000 : m, -1); }
@@ -1280,7 +1281,7 @@ function addDivers(price) {
 function askWeight(p, idx=-1) {
   const r = SHOP.ratlGrams, cur = idx >= 0 ? S.cart[idx].qty : 0;
   const opts = [[0.25, "250 غ"], [r / 1000, `رطل (${r} غ)`], [0.5, "500 غ"], [1, "1 كغ"], [2, "2 كغ"], [5, "5 كغ"]].filter((x, i, a) => a.findIndex(y => y[0] === x[0]) === i);
-  modal(`<h2>⚖️ ${esc(p.name)}<button class="x" onclick="closeModal()">×</button></h2>
+  modal(`<h2>⚖️ ${esc(p.name)}${idx < 0 && S.ui.wv ? ` · ${esc(varName(p, S.ui.wv))}` : ""}<button class="x" onclick="closeModal()">×</button></h2>
     <p class="muted" style="margin-top:0">سعر الكيلو: ${fmt(p.price)}</p>
     <div class="row3">${opts.map(([k, l]) => `<button class="btn ghost sm" style="width:100%" onclick="setWeight('${p.id}',${k},${idx})">${l}</button>`).join("")}</div>
     <div class="row2"><div><label class="f">الوزن بالغرام</label><input class="in" id="wg" inputmode="numeric" value="${cur ? Math.round(cur * 1000) : ""}" placeholder="مثلاً 750" oninput="$('#wm').value=this.value?Math.round(num(this.value)/1000*${+p.price}):''"></div>
@@ -1291,7 +1292,7 @@ function askWeight(p, idx=-1) {
 function setWeight(pid, kg, idx) {
   kg = r2(kg); if (!(kg > 0)) return toast("اكتب الوزن");
   const p = prod(pid);
-  if (idx >= 0) { S.cart[idx].qty = kg; S.ui.sel = idx; } else { S.cart.push({pid, name: p.name, unit: "kg", unitName: "كغ", price: +p.price || 0, qty: kg}); S.ui.sel = S.cart.length - 1; }
+  if (idx >= 0) { S.cart[idx].qty = kg; S.ui.sel = idx; } else { const v = S.ui.wv || "", vn = varName(p, v); S.cart.push({pid, v, name: vn ? `${p.name} · ${vn}` : p.name, unit: "kg", unitName: "كغ", price: +p.price || 0, qty: kg}); S.ui.sel = S.cart.length - 1; S.ui.wv = ""; }
   S.ui.last = pid; saveCart(); if ($("#bgrid")) { $("#ov").remove(); openBrowse(); } else closeModal(); drawCart(); posFocus();
 }
 function cartQ(i, d) {

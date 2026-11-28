@@ -345,7 +345,7 @@ function openProduct(id){
     ${p.img?`<div class="pgal" id="pgal"><img src="${p.img}"></div><div class="pdots" id="pdots"></div>`:""}
     ${p.desc?`<p style="color:var(--muted);margin:4px 0 8px">${esc(p.desc)}</p>`:""}
     <div class="price" style="font-size:20px">${priceLabel(p)}</div>
-    ${vars(p).length?`<label class="f">🎨 اختار اللون</label><div class="vch" id="vch">${vars(p).map(x=>`<button data-v="${esc(x.id)}" onclick="pick.v=this.dataset.v;[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this))"><i style="background:${esc(x.hex||"#ccc")}"></i>${esc(x.name)}</button>`).join("")}</div>`:""}
+    ${vars(p).length?`<label class="f">🎨 اختار اللون / النوع</label><div class="vch" id="vch">${vars(p).map(x=>`<button data-v="${esc(x.id)}" onclick="pick.v=this.dataset.v;[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this))"><i style="background:${esc(x.hex||"#ccc")}"></i>${esc(x.name)}</button>`).join("")}</div>`:""}
     <div id="qbox"></div>
     <div class="total"><span>المجموع</span><span id="ptot"></span></div>
     <button class="btn" onclick="addToCart()">أضف للسلة</button>`);
@@ -368,7 +368,7 @@ function updT(){const p=pick.p;const t=p.unit==="kg"?p.price*pick.grams/1000:p.p
 function addToCart(){
   const p=pick.p;
   if(p.unit==="kg"&&(!pick.grams||pick.grams<50)){toast("اختار الوزن");return}
-  if(vars(p).length&&!pick.v){toast("🎨 اختار اللون");const v=$("#vch");v&&v.classList.add("shake");setTimeout(()=>v&&v.classList.remove("shake"),600);return}
+  if(vars(p).length&&!pick.v){toast("🎨 اختار اللون / النوع");const v=$("#vch");v&&v.classList.add("shake");setTimeout(()=>v&&v.classList.remove("shake"),600);return}
   const vx=vars(p).find(x=>x.id===pick.v);
   const it={pid:p.id,vid:vx?vx.id:"",name:vx?`${p.name} · ${vx.name}`:p.name,img:p.img?p.img:"",unit:p.unit,unitName:p.unitName||"",price:p.price,grams:p.unit==="kg"?pick.grams:0,qty:p.unit==="kg"?1:pick.qty};
   const same=S.cart.find(x=>x.pid===it.pid&&(x.vid||"")===it.vid&&x.unit===it.unit&&(it.unit==="kg"?x.grams===it.grams:true));
