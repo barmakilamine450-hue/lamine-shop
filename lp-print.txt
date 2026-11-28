@@ -1,0 +1,267 @@
+# Lamine Pro - install direct label printing (one time). Source: github.com/barmakilamine450-hue/lamine-shop
+$ErrorActionPreference = 'Stop'
+Write-Host ''
+Write-Host '  Lamine Pro - installing direct label printing (Xprinter XP-410B)...' -ForegroundColor Yellow
+$D = Join-Path $env:APPDATA 'LaminePrint'
+New-Item -ItemType Directory -Force -Path $D | Out-Null
+try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:17777/quit' -TimeoutSec 2 | Out-Null; Start-Sleep -Milliseconds 800 } catch {}
+$cs = @'
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Printing;
+using System.Globalization;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+
+// Lamine Pro - direct label printing helper (listens on 127.0.0.1 only)
+public static class LaminePrint
+{
+    public static string LogFile = "";
+    static readonly string[] Origins = new string[] { "https://barmakilamine450-hue.github.io", "http://127.0.0.1:", "http://localhost:" };
+
+    public static void Log(string m)
+    {
+        try { if (LogFile.Length > 0) File.AppendAllText(LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + "\r\n"); } catch { }
+    }
+
+    public static void Run(int port)
+    {
+        TcpListener l;
+        try { l = new TcpListener(IPAddress.Loopback, port); l.Start(); }
+        catch (Exception e) { Log("already running? " + e.Message); return; }
+        Log("started on " + port);
+        while (true)
+        {
+            TcpClient c = l.AcceptTcpClient();
+            Thread t = new Thread(Handle);
+            t.SetApartmentState(ApartmentState.STA);
+            t.IsBackground = true;
+            t.Start(c);
+        }
+    }
+
+    static int HeaderEnd(byte[] b, int n)
+    {
+        for (int i = 3; i < n; i++) if (b[i - 3] == 13 && b[i - 2] == 10 && b[i - 1] == 13 && b[i] == 10) return i - 3;
+        return -1;
+    }
+
+    static bool Allowed(string o)
+    {
+        if (o.Length == 0) return true;
+        foreach (string a in Origins) if (o == a || (a.EndsWith(":") && o.StartsWith(a))) return true;
+        return false;
+    }
+
+    static void Handle(object o)
+    {
+        TcpClient c = (TcpClient)o;
+        try
+        {
+            c.ReceiveTimeout = 20000;
+            NetworkStream ns = c.GetStream();
+            MemoryStream ms = new MemoryStream();
+            byte[] buf = new byte[65536];
+            int he = -1;
+            while (he < 0)
+            {
+                int n = ns.Read(buf, 0, buf.Length);
+                if (n <= 0) return;
+                ms.Write(buf, 0, n);
+                he = HeaderEnd(ms.GetBuffer(), (int)ms.Length);
+                if (he < 0 && ms.Length > 65536) return;
+            }
+            string head = Encoding.ASCII.GetString(ms.GetBuffer(), 0, he);
+            string[] lines = head.Split(new string[] { "\r\n" }, StringSplitOptions.None);
+            string[] rq = lines[0].Split(' ');
+            string method = rq[0], path = rq.Length > 1 ? rq[1] : "/";
+            int len = 0; string origin = "";
+            foreach (string h in lines)
+            {
+                int i = h.IndexOf(':'); if (i < 0) continue;
+                string k = h.Substring(0, i).Trim().ToLowerInvariant(), v = h.Substring(i + 1).Trim();
+                if (k == "content-length") int.TryParse(v, out len);
+                else if (k == "origin") origin = v;
+            }
+            if (!Allowed(origin)) { Send(ns, 403, "text/plain", "origin", ""); return; }
+            if (len > 40 * 1024 * 1024) { Send(ns, 413, "text/plain", "too big", origin); return; }
+            int have = (int)ms.Length - (he + 4);
+            while (have < len)
+            {
+                int n = ns.Read(buf, 0, Math.Min(buf.Length, len - have));
+                if (n <= 0) break;
+                ms.Write(buf, 0, n); have += n;
+            }
+            string body = len > 0 ? Encoding.UTF8.GetString(ms.GetBuffer(), he + 4, Math.Min(len, have)) : "";
+            if (method == "OPTIONS") { Send(ns, 204, "text/plain", "", origin); return; }
+            if (path.StartsWith("/ping")) { Send(ns, 200, "application/json", Ping(), origin); return; }
+            if (path.StartsWith("/print") && method == "POST") { Send(ns, 200, "application/json", DoPrint(body), origin); return; }
+            if (path.StartsWith("/quit")) { Send(ns, 200, "text/plain", "bye", origin); c.Close(); Log("quit"); Environment.Exit(0); }
+            Send(ns, 404, "text/plain", "not found", origin);
+        }
+        catch (Exception e) { Log("handle: " + e.Message); }
+        finally { try { c.Close(); } catch { } }
+    }
+
+    static void Send(NetworkStream ns, int code, string type, string body, string origin)
+    {
+        byte[] b = Encoding.UTF8.GetBytes(body);
+        StringBuilder h = new StringBuilder();
+        h.Append("HTTP/1.1 " + code + (code == 200 ? " OK" : code == 204 ? " No Content" : " Error") + "\r\n");
+        h.Append("Content-Type: " + type + "; charset=utf-8\r\nContent-Length: " + b.Length + "\r\nConnection: close\r\nCache-Control: no-store\r\n");
+        if (origin.Length > 0)
+            h.Append("Access-Control-Allow-Origin: " + origin + "\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\nAccess-Control-Max-Age: 600\r\n");
+        h.Append("\r\n");
+        byte[] hb = Encoding.ASCII.GetBytes(h.ToString());
+        ns.Write(hb, 0, hb.Length);
+        if (b.Length > 0) ns.Write(b, 0, b.Length);
+        ns.Flush();
+    }
+
+    static string Esc(string s) { return (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\""); }
+    static string N(float f) { return f.ToString("0.#", CultureInfo.InvariantCulture); }
+
+    static List<string> Printers()
+    {
+        List<string> r = new List<string>();
+        foreach (string n in PrinterSettings.InstalledPrinters) r.Add(n);
+        return r;
+    }
+
+    public static string FindPrinter(string want)
+    {
+        if (string.IsNullOrEmpty(want)) want = "410";
+        List<string> ps = Printers();
+        foreach (string n in ps) if (string.Equals(n, want, StringComparison.OrdinalIgnoreCase)) return n;
+        foreach (string n in ps) if (n.IndexOf(want, StringComparison.OrdinalIgnoreCase) >= 0) return n;
+        return null;
+    }
+
+    static void Paper(string name, out float w, out float h)
+    {
+        w = 0; h = 0;
+        try
+        {
+            PrinterSettings ps = new PrinterSettings(); ps.PrinterName = name;
+            PageSettings pg = ps.DefaultPageSettings;
+            w = pg.PaperSize.Width * 0.254f; h = pg.PaperSize.Height * 0.254f;
+            if (pg.Landscape) { float t = w; w = h; h = t; }
+        }
+        catch { }
+    }
+
+    static string Ping()
+    {
+        StringBuilder sb = new StringBuilder("{\"ok\":true,\"v\":1,\"printers\":[");
+        bool first = true;
+        foreach (string n in Printers()) { if (!first) sb.Append(","); first = false; sb.Append("\"" + Esc(n) + "\""); }
+        string lp = FindPrinter("410");
+        float w = 0, h = 0;
+        if (lp != null) Paper(lp, out w, out h);
+        sb.Append("],\"label\":\"" + Esc(lp ?? "") + "\",\"w\":" + N(w) + ",\"h\":" + N(h) + "}");
+        return sb.ToString();
+    }
+
+    public static string DoPrint(string body)
+    {
+        string want = "410"; float wmm = 0, hmm = 0;
+        List<Bitmap> pages = new List<Bitmap>();
+        try
+        {
+            foreach (string raw in body.Split('\n'))
+            {
+                string line = raw.Trim(); int i = line.IndexOf('='); if (i <= 0) continue;
+                string k = line.Substring(0, i), v = line.Substring(i + 1);
+                if (k == "printer") want = v;
+                else if (k == "w") float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out wmm);
+                else if (k == "h") float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out hmm);
+                else if (k == "item")
+                {
+                    int j = v.IndexOf('|'); if (j < 0) continue;
+                    int n = 1; int.TryParse(v.Substring(0, j), out n); n = Math.Max(1, Math.Min(500, n));
+                    string b64 = v.Substring(j + 1); int comma = b64.IndexOf(','); if (comma >= 0) b64 = b64.Substring(comma + 1);
+                    Bitmap bmp = new Bitmap(new MemoryStream(Convert.FromBase64String(b64)));
+                    for (int x = 0; x < n; x++) pages.Add(bmp);
+                }
+            }
+        }
+        catch (Exception e) { Log("parse: " + e.Message); return "{\"ok\":false,\"err\":\"data\"}"; }
+        if (pages.Count == 0) return "{\"ok\":false,\"err\":\"empty\"}";
+        string pname = FindPrinter(want);
+        if (pname == null) return "{\"ok\":false,\"err\":\"no-printer\"}";
+        try
+        {
+            PrintDocument pd = new PrintDocument();
+            pd.PrinterSettings.PrinterName = pname;
+            pd.PrintController = new StandardPrintController();
+            pd.DocumentName = "Lamine Pro labels";
+            if (wmm > 5 && hmm > 5)
+            {
+                pd.DefaultPageSettings.PaperSize = new PaperSize("Lamine " + N(wmm) + "x" + N(hmm), (int)Math.Round(wmm / 25.4 * 100), (int)Math.Round(hmm / 25.4 * 100));
+                pd.DefaultPageSettings.Landscape = false;
+            }
+            pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+            pd.OriginAtMargins = false;
+            int idx = 0;
+            pd.PrintPage += delegate (object s, PrintPageEventArgs e)
+            {
+                Bitmap img = pages[idx];
+                Graphics g = e.Graphics;
+                g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                Rectangle pb = e.PageBounds;
+                float hx = e.PageSettings.HardMarginX, hy = e.PageSettings.HardMarginY;
+                float sc = Math.Min((float)pb.Width / img.Width, (float)pb.Height / img.Height);
+                float dw = img.Width * sc, dh = img.Height * sc;
+                g.DrawImage(img, -hx + (pb.Width - dw) / 2f, -hy + (pb.Height - dh) / 2f, dw, dh);
+                idx++;
+                e.HasMorePages = idx < pages.Count;
+            };
+            pd.Print();
+            Log("printed " + pages.Count + " on " + pname);
+            return "{\"ok\":true,\"printer\":\"" + Esc(pname) + "\",\"n\":" + pages.Count + "}";
+        }
+        catch (Exception e) { Log("print: " + e.Message); return "{\"ok\":false,\"err\":\"" + Esc(e.Message) + "\"}"; }
+    }
+}
+'@
+$ps = @'
+# Lamine Pro - direct label printing (Xprinter XP-410B)
+# Listens on 127.0.0.1:17777 only (this computer). Started at Windows logon by LaminePrint.vbs (Startup folder).
+$ErrorActionPreference = 'Stop'
+$D = Split-Path -Parent $MyInvocation.MyCommand.Path
+try {
+  Add-Type -AssemblyName System.Drawing
+  $cs = [IO.File]::ReadAllText((Join-Path $D 'LaminePrint.cs'))
+  Add-Type -TypeDefinition $cs -ReferencedAssemblies ([System.Drawing.Bitmap].Assembly.Location)
+  [LaminePrint]::LogFile = (Join-Path $D 'log.txt')
+  [LaminePrint]::Run(17777)
+} catch {
+  Add-Content -LiteralPath (Join-Path $D 'log.txt') -Value ((Get-Date).ToString('yyyy-MM-dd HH:mm:ss') + '  ERROR ' + $_)
+}
+'@
+[IO.File]::WriteAllText((Join-Path $D 'LaminePrint.cs'), $cs, (New-Object Text.UTF8Encoding $true))
+[IO.File]::WriteAllText((Join-Path $D 'LaminePrint.ps1'), $ps, (New-Object Text.UTF8Encoding $true))
+$ps1 = Join-Path $D 'LaminePrint.ps1'
+$vbs = 'CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""' + $ps1 + '""", 0, False'
+[IO.File]::WriteAllText((Join-Path $D 'run.vbs'), $vbs, [Text.Encoding]::Unicode)
+$st = [Environment]::GetFolderPath('Startup')
+Copy-Item -LiteralPath (Join-Path $D 'run.vbs') -Destination (Join-Path $st 'LaminePrint.vbs') -Force
+Start-Process -FilePath 'wscript.exe' -ArgumentList ('"' + (Join-Path $D 'run.vbs') + '"')
+$r = $null
+for ($i = 0; $i -lt 20 -and -not $r; $i++) { Start-Sleep -Seconds 1; try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:17777/ping' -TimeoutSec 2 } catch {} }
+if ($r -and $r.ok) {
+  Write-Host ''
+  Write-Host '  OK  -  Lamine Print is running' -ForegroundColor Green
+  if ($r.label) { Write-Host ('  Label printer: ' + $r.label) -ForegroundColor Green } else { Write-Host '  (no printer with 410 in its name - choose it in Lamine Pro)' -ForegroundColor Yellow }
+  Write-Host '  Go back to Lamine Pro.'
+} else {
+  Write-Host '  ERROR - take a photo of this window' -ForegroundColor Red
+  if (Test-Path (Join-Path $D 'log.txt')) { Get-Content (Join-Path $D 'log.txt') | Select-Object -Last 6 }
+}
+Start-Sleep -Seconds 10

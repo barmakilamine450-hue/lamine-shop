@@ -453,7 +453,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "611800505961",
   appId: "1:611800505961:web:ca31d6b0b41a4a6c8f4cf8"
 };
-const APP_VERSION = "1.6.3";
+const APP_VERSION = "1.7.0";
 try { const th = JSON.parse(localStorage.getItem("lp_theme") || "null"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
 const DEF_SHOP = {
   name: "Lamine Emballage", tagline: "عالم متكامل لمواد الحلويات والتغليف", whatsapp: "0665813629",
@@ -849,6 +849,7 @@ function startData() {
   DB.watchDoc("settings", "pro", d => { S.pro = d || {}; S.ready.pro = true; schedule(); setTimeout(dailyDigest, 3000); });
   DB.watchDoc("meta", "digest", d => { S.meta.digest = d || {}; });
   if (typeof watchCash === "function") watchCash();
+  if (typeof lblStation === "function") setTimeout(lblStation, 2500);
   if (isOwner()) {
     on("costs", "costs", null, byId);
     on("customers", "customers", null, rows => rows.sort((a, b) => (b.bal || 0) - (a.bal || 0)));
@@ -1545,7 +1546,8 @@ async function saveProd(isEdit) {
   if (qS === "" && !S.inv[id] && !invD.barcode && invD.min == null) ops.splice(ops.findIndex(o => o.c === "inv"), 1);
   const expEl = $("#e_exp"), exp = expEl ? expEl.value : "";
   if (/^\d{4}-\d\d-\d\d$/.test(exp)) ops.push({t: "set", c: "batches", id: uid(), d: {pid: id, name: EP.name, barcode: bc, exp, qty: qS, alerts: [30, 7, 1], note: "", done: false, created: Date.now(), ts: Date.now(), by: S.me.name}});
-  try { await commitFast(ops, "product"); closeModal(); toast(exp ? "✅ تحفظت السلعة + تاريخ الانتهاء" : "✅ تحفظت السلعة"); }
+  try { await commitFast(ops, "product"); closeModal(); toast(exp ? "✅ تحفظت السلعة + تاريخ الانتهاء" : "✅ تحفظت السلعة");
+    if (!isEdit) { if (bc) { S.inv[id] = Object.assign(S.inv[id] || {}, {barcode: bc}); } setTimeout(() => ask(`✅ تحفظت «${esc(EP.name)}». تطبع الملصق تاعها؟`, () => openLabel(id), "🏷️ إيه، اطبع", false), 400); } }
   catch (e) { $("#e_err").textContent = "ما تحفظتش (الصلاحيات ولا حجم الصورة)"; $("#e_save").disabled = false; }
 }
 async function delProduct(id) {
@@ -2005,6 +2007,7 @@ VIEWS.settings = {
         <div class="it" onclick="ls('lp_openpos',!ls('lp_openpos'));renderPage();toast(ls('lp_openpos')?'✅ الكاسة تتحل مباشرة في هاد الجهاز':'الرئيسية تتحل في الأول')"><div class="th">🖥️</div><div class="t"><b>فتح الكاسة مباشرة</b><small>في هاد الجهاز: كي تدخل تتحل الكاسة ديريكت</small></div><span class="pill ${ls("lp_openpos") ? "p-ok" : "p-mut"}">${ls("lp_openpos") ? "مشعول" : "مطفي"}</span></div>
         <div class="it" onclick="openTheme()"><div class="th">🎨</div><div class="t"><b>الألوان</b><small>فاتح · رمادي هادي · داكن (يريّح العينين)</small></div><span>←</span></div>
         <div class="it" onclick="openPrintCfg()"><div class="th">🖨️</div><div class="t"><b>الطباعة</b><small>حجم الكتابة في التيكي · تجربة الطباعة</small></div><span>←</span></div>
+        <div class="it" onclick="openLblSetup()"><div class="th">🏷️</div><div class="t"><b>طابعة الملصقات</b><small>XP-410B · الطباعة المباشرة ومن الهاتف</small></div><span>←</span></div>
         <a class="it" href="./" style="text-decoration:none;color:inherit"><div class="th">🛍️</div><div class="t"><b>صفحة الزبائن</b><small>الموقع اللي يشوفو الزبائن</small></div><span>←</span></a>
       </div>
       <div class="card"><h3>👤 الحساب</h3><p style="margin:0 0 10px">${esc(S.me.name)} · <span class="pill ${own ? "p-ok" : "p-info"}">${own ? "👑 مول المحل" : "🧑‍🔧 خدام"}</span><br><small class="muted"><bdi>${esc(S.user.email || "")}</bdi></small></p>
@@ -2713,8 +2716,8 @@ function openLabel(pid) {
       ${[1, 5, 10].map(n => `<button class="chip" onclick="$('#lb_n').value=${n}">${n}</button>`).join("")}${q > 0 && !isKg(p) ? `<button class="chip" onclick="$('#lb_n').value=${Math.min(200, Math.round(q))}">كيما المخزون (${Math.round(q)})</button>` : ""}</div>
     <label class="f">قياس الملصق (مم)</label>
     <div class="chips" style="flex-wrap:wrap">${LBL_SIZES.map(([k, l]) => `<button class="chip ${c.size === k ? "on" : ""}" onclick="setLbl({size:'${k}'})">${l}</button>`).join("")}</div>
-    <div style="height:14px"></div><button class="btn dark" onclick="printLabels([{...labelItem('${pid}'),n:num($('#lb_n').value)||1}])">🖨️ اطبع في طابعة الملصقات</button>
-    <p class="muted" style="font-size:13px;margin:10px 2px 0">يتحل <b>Microsoft Edge</b> بالملصقات. أول مرة: اختار <b>Xprinter XP-410B</b> في «الطابعة»، و Edge يتفكّرها.</p>`);
+    <div style="height:14px"></div><div id="lbst"></div><button class="btn dark" onclick="printLabels([{...labelItem('${pid}'),n:num($('#lb_n').value)||1}])">🖨️ ${IS_WIN ? "اطبع في طابعة الملصقات" : "اطبع في طابعة المحل"}</button>`);
+  lblStatus();
 }
 function setLbl(o) { S.ui.lblN = num(($("#lb_n") || {}).value) || S.ui.lblN; ls("lp_lbl", Object.assign(lblCfg(), o)); openLabel(S.ui.lblPid); }
 async function genBarcode(pid) {
@@ -2722,12 +2725,134 @@ async function genBarcode(pid) {
   try { await commitFast([{t: "set", c: "inv", id: pid, d: {barcode: bc, updatedAt: Date.now()}, merge: true}], "barcode"); } catch (e) { return toast("❌ " + (e.code || e.message)); }
   S.inv[pid] = Object.assign(S.inv[pid] || {}, {barcode: bc}); toast("🔢 تزاد الباركود: " + bc); openLabel(pid);
 }
-function printLabels(items) {
-  const c = lblCfg(), data = {shop: SHOP.name || "", mode: c.mode, size: c.size, items: items.map(x => ({name: x.name, bc: x.bc, price: x.price, unit: x.unit, n: Math.max(1, Math.min(500, Math.round(x.n || 1)))}))};
-  const url = new URL("labels.html", location.href).href + "#" + encodeURIComponent(JSON.stringify(data));
-  if (/Windows/i.test(navigator.userAgent)) { location.href = "microsoft-edge:" + url; toast("🏷️ راهي تتحل في Edge...", 3000); }
-  else window.open(url, "_blank");
+/* ============ الطباعة المباشرة (Lamine Print في الميكرو) + الهاتف يبعث للميكرو ============ */
+const LP_URL = "http://127.0.0.1:17777";
+const IS_WIN = /Windows/i.test(navigator.userAgent);
+const LP_CMD = `powershell -nop -ep bypass -c "[Net.ServicePointManager]::SecurityProtocol=3072;iex(irm 'https://barmakilamine450-hue.github.io/lamine-shop/lp-print.txt')"`;
+let LPH = null, LPH_T = 0;
+async function lpPing(force) {
+  if (!IS_WIN || typeof DEMO_BUILD !== "undefined" && !window.LP_TEST) return null;
+  if (!force && Date.now() - LPH_T < 15000) return LPH;
+  LPH_T = Date.now();
+  try { const r = await Promise.race([fetch(LP_URL + "/ping", {cache: "no-store"}).then(r => r.json()), new Promise((_, j) => setTimeout(() => j(0), 1800))]); LPH = r && r.ok ? r : null; }
+  catch (e) { LPH = null; }
+  return LPH;
 }
+// القياس بالمليمتر: [عرض، طول، نبعثوه للطابعة؟]
+function lblSizeMM(c) {
+  c = c || lblCfg();
+  if (c.size && c.size !== "auto") { const [w, h] = c.size.split("x").map(Number); return [w, h, true]; }
+  if (LPH && LPH.w >= 20 && LPH.w <= 110 && LPH.h >= 10 && LPH.h <= 110) return [LPH.w, LPH.h, false];
+  return [50, 25, true];
+}
+// الملصق كتصويرة أبيض/أكحل بدقة الطابعة (203 نقطة في البوصة)
+function labelPNG(it, mode, shop, wmm, hmm) {
+  const DPI = 203, W = Math.round(wmm / 25.4 * DPI), H = Math.round(hmm / 25.4 * DPI);
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const g = cv.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.fillStyle = "#000"; g.textAlign = "center"; g.textBaseline = "middle";
+  const F = 'Tahoma, "Segoe UI", Arial, sans-serif', font = (px, b) => g.font = `${b ? "bold " : ""}${Math.round(px)}px ${F}`;
+  const fit = (t, px, b, mw, min) => { px = Math.round(px); for (; px > (min || 8); px--) { font(px, b); if (g.measureText(t).width <= mw) break; } font(px, b); return px; };
+  const po = mode === "price" || !it.bc, pad = H * .04, mw = W * .94, cx = W / 2;
+  const price = Number(it.price || 0).toLocaleString("fr-FR", {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ | /g, " ") + " DA" + (it.unit ? " " + it.unit : "");
+  let y = pad;
+  if (shop) { g.direction = "ltr"; const z = fit(shop, H * .085, false, mw); g.fillText(shop, cx, y + z / 2); y += z * 1.05 + H * .015; }
+  // الاسم: سطر ولا زوج
+  g.direction = "rtl";
+  const name = String(it.name || ""), base = po ? H * .2 : H * .15; let lines = [name], ns = base;
+  font(base, true);
+  if (g.measureText(name).width > mw && name.includes(" ")) {
+    const w = name.split(/\s+/); let best = null;
+    for (let i = 1; i < w.length; i++) { const a = w.slice(0, i).join(" "), b = w.slice(i).join(" "), m = Math.max(g.measureText(a).width, g.measureText(b).width); if (!best || m < best.m) best = {a, b, m}; }
+    lines = [best.a, best.b]; ns = base * .8;
+  }
+  let nz = ns; lines.forEach(l => { nz = Math.min(nz, fit(l, ns, true, mw, 9)); }); font(nz, true);
+  lines.forEach(l => { g.fillText(l, cx, y + nz * .55); y += nz * 1.1; });
+  g.direction = "ltr";
+  const pz0 = po ? H * .34 : H * .23, pz = fit(price, pz0, true, mw);
+  if (po) { g.fillText(price, cx, (y + H - pad) / 2 + pz * .05); }
+  else {
+    const py = H - pad - pz * .52; g.fillText(price, cx, py);
+    const dz = fit(it.bc, H * .075, false, mw), dy = py - pz * .56 - dz * .62; g.fillText(it.bc, cx, dy);
+    const top = Math.round(y + H * .015), bot = Math.round(dy - dz * .62 - H * .012), bh = Math.max(10, bot - top);
+    const pats = c128codes(it.bc).map(c => C128[c]).concat("2331112"); let mods = 0; pats.forEach(pt => { for (const d of pt) mods += +d; });
+    const m = Math.max(1, Math.floor((W * .98) / (mods + 20))); let x = Math.round((W - m * mods) / 2);
+    pats.forEach(pt => { for (let i = 0; i < pt.length; i++) { const w = +pt[i] * m; if (i % 2 === 0) g.fillRect(x, top, w, bh); x += w; } });
+  }
+  // أبيض ولا أكحل برك (باش يخرج نقي في الطابعة الحرارية)
+  const im = g.getImageData(0, 0, W, H), a = im.data;
+  for (let i = 0; i < a.length; i += 4) { const v = a[i] * .3 + a[i + 1] * .59 + a[i + 2] * .11 < 150 ? 0 : 255; a[i] = a[i + 1] = a[i + 2] = v; a[i + 3] = 255; }
+  g.putImageData(im, 0, 0);
+  return cv.toDataURL("image/png");
+}
+async function printDirect(items, mode, size) {
+  const c = {...lblCfg(), ...(mode ? {mode} : {}), ...(size ? {size} : {})}, [w, h, ex] = lblSizeMM(c);
+  const body = [`printer=${(LPH && LPH.label) || "410"}`, `w=${ex ? w : 0}`, `h=${ex ? h : 0}`]
+    .concat(items.map(x => `item=${Math.max(1, Math.min(500, Math.round(x.n || 1)))}|${labelPNG(x, c.mode, SHOP.name, w, h)}`)).join("\n");
+  const r = await Promise.race([fetch(LP_URL + "/print", {method: "POST", headers: {"Content-Type": "text/plain"}, body}).then(r => r.json()), new Promise((_, j) => setTimeout(() => j(new Error("timeout")), 30000))]);
+  if (!r.ok) throw new Error(r.err === "no-printer" ? "ما لقيتش الطابعة XP-410B" : (r.err || "print"));
+  return r;
+}
+const jobItems = items => items.map(x => ({name: x.name, bc: x.bc || "", price: +x.price || 0, unit: x.unit || "", n: Math.max(1, Math.min(500, Math.round(x.n || 1)))}));
+async function printLabels(items) {
+  const c = lblCfg();
+  if (IS_WIN && await lpPing(true)) { // الميكرو: ديريكت في XP-410B
+    toast("🖨️ ...", 900);
+    try { const r = await printDirect(jobItems(items)); closeModal(); toast(`🏷️ تطبع ${r.n} ملصق`); } catch (e) { toast("❌ الطابعة: " + e.message, 6000); }
+    return;
+  }
+  if (!IS_WIN) { // الهاتف: نبعثو الملصق للميكرو تاع المحل
+    const id = "lbl_" + uid(), d = {kind: "lbl", ts: Date.now(), by: S.me.name, mode: c.mode, size: c.size, items: jobItems(items)};
+    closeModal();
+    try { await Promise.race([DB.set("meta", id, d), new Promise((_, j) => setTimeout(() => j(new Error("slow")), 8000))]); toast("📤 تبعث للطابعة في المحل 🏷️", 2600); }
+    catch (e) { toast(e.message === "slow" ? "📶 الأنترنت ثقيلة: الملصق يتبعث وحدو كي تولّي مليحة" : "❌ " + (e.code || e.message), 4500); }
+    return;
+  }
+  // الميكرو بلا Lamine Print: نحلّو Edge (كيما قبل)
+  const data = {shop: SHOP.name || "", mode: c.mode, size: c.size, items: jobItems(items)};
+  const url = new URL("labels.html", location.href).href + "#" + encodeURIComponent(JSON.stringify(data));
+  location.href = "microsoft-edge:" + url; toast("🏷️ راهي تتحل في Edge...", 3000);
+}
+// حالة الطابعة في نافذة الملصق
+async function lblStatus() {
+  const box = $("#lbst"); if (!box) return;
+  if (IS_WIN) {
+    const h = await lpPing(true); if (!$("#lbst")) return;
+    if (h) { const [w, hh] = lblSizeMM(); box.innerHTML = `<div class="note ok">✅ يطبع ديريكت في <b>${esc(h.label || "XP-410B")}</b> · <bdi>${w}×${hh}</bdi> مم</div>`; }
+    else box.innerHTML = lblInstallHTML();
+  } else {
+    let st = null; try { st = await DB.get("meta", "lblStation"); } catch (e) {}
+    if (!$("#lbst")) return;
+    const on = st && Date.now() - st.ts < 3 * 60000;
+    box.innerHTML = on ? `<div class="note ok">🟢 الملصق يتبعث للميكرو تاع المحل ويخرج في <b>${esc(st.printer || "XP-410B")}</b></div>`
+      : `<div class="note warn">🔴 الميكرو تاع المحل مطفي ولا Lamine Print ما راهوش خدام. الملصق يستنى، ويخرج كي يتشعل الميكرو.</div>`;
+  }
+}
+function lblInstallHTML() {
+  return `<div class="note warn" style="line-height:1.8">⚡ <b>باش يطبع ديريكت بلا نوافذ</b> (وحتى من الهاتف)، ركّب «Lamine Print» مرة وحدة:<br>
+    1️⃣ اضغط <button class="mini" onclick="copyLpCmd()">📋 انسخ الأمر</button><br>2️⃣ اضغط <b>⊞ Windows + R</b> في الكلافيي<br>3️⃣ <b>Ctrl + V</b> ومن بعد <b>Entrée</b> ← تستنى حتى يكتب <b>OK</b><br>
+    4️⃣ اضغط <button class="mini" onclick="LPH_T=0;lblStatus()">🔄 عاود جرّب</button> (إذا سقساك Chrome «الشبكة المحلية» اضغط <b>Autoriser</b>)</div>`;
+}
+async function copyLpCmd() { try { await navigator.clipboard.writeText(LP_CMD); toast("📋 تنسخ! دروك ⊞ + R ومن بعد Ctrl + V", 3500); } catch (e) { prompt("انسخ هاد الأمر:", LP_CMD); } }
+function openLblSetup() { modal(`<h2>🏷️ طابعة الملصقات<button class="x" onclick="closeModal()">×</button></h2><div id="lbst"><p class="muted">⏳ ...</p></div>
+  <p class="muted" style="font-size:13px">من الهاتف: اضغط 🏷️ في السلعة ← «اطبع»، والملصق يخرج في الطابعة تاع المحل (الميكرو لازم يكون مشعول).</p>`); lblStatus(); }
+
+/* الميكرو = «محطة الطباعة»: يطبع الملصقات اللي يبعثهم الهاتف */
+let LBLQ = null; const LBL_DONE = new Set();
+async function lblStation() {
+  if (!IS_WIN || LBLQ) return;
+  if (!(await lpPing(true))) return;
+  LBLQ = DB.watch("meta", list => { if (!list) return; list.filter(j => j.kind === "lbl" && !LBL_DONE.has(j.id)).sort((a, b) => a.ts - b.ts).forEach(runLblJob); }, {where: [["kind", "==", "lbl"]]});
+  lblBeat();
+}
+async function runLblJob(j) {
+  LBL_DONE.add(j.id);
+  if (Date.now() - (j.ts || 0) > 6 * 3600e3) { DB.remove("meta", j.id).catch(() => {}); return; }
+  try { const r = await printDirect(j.items || [], j.mode, j.size); toast(`🏷️ ${r.n} ملصق من ${j.by || "الهاتف"}`, 2500); }
+  catch (e) { toast("❌ ما طبعش ملصق الهاتف: " + e.message, 6000); setTimeout(() => LBL_DONE.delete(j.id), 60000); return; }
+  DB.remove("meta", j.id).catch(() => {});
+}
+function lblBeat() { DB.set("meta", "lblStation", {kind: "station", ts: Date.now(), printer: (LPH && LPH.label) || ""}).catch(() => {}); }
+setInterval(async () => { if (!IS_WIN) return; if (LBLQ) { if (await lpPing(true)) lblBeat(); } else lblStation(); }, 60000);
 
 </script>
 </body>
